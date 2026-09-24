@@ -14,8 +14,8 @@ index.html?endpoint=http://localhost:7878/query
 
 The current version of Opsis is meant for personal knowledge graphs. It is too slow for public graphs the size of DBpedia or Wikidata.
 
-- [Live demo](https://kvistgaard.github.io/opsis/?endpoint=https://data.nobelprize.org/store/sparql) on the Nobel Prize linked data, about 110,000 triples.
-- A personal knowledge graph, with stacked panes open on a blog post:
+- [Live demo](https://kvistgaard.github.io/opsis/?endpoint=https://data.nobelprize.org/store/sparql) on the Nobel Prize linked data.
+- A personal knowledge graph, with stacked panes:
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshot-pkg-dark.png">
