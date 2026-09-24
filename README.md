@@ -1,7 +1,8 @@
 # Opsis
 
-The one-file faceted browser for RDF graphs. Open `index.html`, give it the
-SPARQL endpoint, and start browsing the graph behind.
+One-file faceted browser for RDF graphs. 
+
+Open `index.html`, give it the SPARQL endpoint, and start browsing the graph behind.
 
 Every click is a SPARQL query. 
 
