@@ -254,8 +254,11 @@ async function probeSearchApi() {
   try {
     const u = new URL(ENDPOINT);
     const candidate = `${u.origin}/search`;
+    // A website may answer /search with its own HTML page, as
+    // data.nobelprize.org does, so only the sidecar's JSON shape counts.
     const r = await fetch(`${candidate}?q=&limit=1`);
-    searchApi = r.ok ? candidate : false;
+    const j = r.ok ? await r.json() : null;
+    searchApi = j && Array.isArray(j.results) && typeof j.total === 'number' ? candidate : false;
   } catch (e) { searchApi = false; }
 }
 
