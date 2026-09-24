@@ -21,6 +21,8 @@ project and now stands on its own.
   `?panes=stacked` to the URL, and each entity opens beside the one it was
   opened from. Panes scrolled past stay as spines. The open panes are kept in
   the URL as `open=` parameters.
+- A Class or Graph section appears only when it offers a choice between groups
+  of entities: two values or more, most of them holding more than one entity.
 - A copy button beside each IRI in the entity list and the entity pane.
 - Settings read from the endpoint: dereference rules in nodica's `cfg:`
   vocabulary open `file:` IRIs in desktop applications, and `dcat:DataService`

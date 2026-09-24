@@ -482,9 +482,22 @@ const whereWith = extra => `${filters() || '?s a ?anyClass .'}\n  ${IRI_ONLY}${e
 // took ten times as long that way, for the same rows. Both count IRI subjects
 // only, as the list does; counting blank nodes made a graph's facet promise
 // several times the entities its list then showed.
+// A facet earns its section by offering a choice between groups: two values
+// or more, most of them holding more than one entity. The Nobel Prize store
+// fails it for graphs: beside its data graph it keeps each record's metadata
+// in a graph of its own, 4,581 graphs of one entity each, which listed read
+// as a column of numbers. The verdict is reached once, on the unfiltered
+// store, so a section does not come and go as the user clicks, and a hidden
+// facet's query is not sent again. A selection made some other way (the
+// "list" link sets a class) still shows its section, so it can be cleared.
+const offered = {cls: null, graph: null};
+const offersChoice = rows => rows.length >= 2 &&
+  rows.filter(b => Number(b.n.value) >= 2).length > rows.length / 2;
+const shown = key => offered[key] !== false || !!state[key];
+
 async function loadFacets(current) {
   const [classes, graphs] = await Promise.all([
-    sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
+    !shown('cls') ? [] : sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
       { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
           ${filters('cls')}
           ?s a ?leaf .
@@ -493,7 +506,7 @@ async function loadFacets(current) {
         } GROUP BY ?c ORDER BY DESC(?n) LIMIT 40 }
       OPTIONAL { ?c rdfs:label ?l }
     } GROUP BY ?c ?n ORDER BY DESC(?n)`),
-    sparql(`${PREFIX}SELECT ?g ?n (SAMPLE(?t) AS ?title) WHERE {
+    !shown('graph') ? [] : sparql(`${PREFIX}SELECT ?g ?n (SAMPLE(?t) AS ?title) WHERE {
       { SELECT ?g (COUNT(DISTINCT ?s) AS ?n) WHERE {
           ${filters('graph')}
           GRAPH ?g { ?s ?gp ?go }
@@ -503,6 +516,10 @@ async function loadFacets(current) {
     } GROUP BY ?g ?n ORDER BY DESC(?n)`),
   ]);
   if (!current()) return;
+  if (!state.cls && !state.graph && !state.text) {
+    if (offered.cls === null) offered.cls = offersChoice(classes);
+    if (offered.graph === null) offered.graph = offersChoice(graphs);
+  }
   // Every class carries its namespace hint, so the vocabulary a class belongs
   // to reads off the list rather than out of the hover. Graph names share one
   // namespace, so there the hint appears only where two share a title.
@@ -517,11 +534,13 @@ async function loadFacets(current) {
                 <span>${esc(nm)}${hint}</span><span class="n">${b.n.value}</span></div>`;
     }).join('');
   };
+  const section = (key, title, body) => !shown(key) ? '' :
+    `<h2>${title} ${state[key] ? `<button class="clear" data-clear="${key}">clear</button>` : ''}</h2>` + body;
   document.getElementById('facets').innerHTML =
-    `<h2>Class ${state.cls ? '<button class="clear" data-clear="cls">clear</button>' : ''}</h2>` +
-    render(classes, b => b.c.value, b => b.label ? b.label.value : localName(b.c.value), 'cls', true) +
-    `<h2>Graph ${state.graph ? '<button class="clear" data-clear="graph">clear</button>' : ''}</h2>` +
-    render(graphs, b => b.g.value, b => b.title ? b.title.value : localName(b.g.value), 'graph');
+    section('cls', 'Class',
+      render(classes, b => b.c.value, b => b.label ? b.label.value : localName(b.c.value), 'cls', true)) +
+    section('graph', 'Graph',
+      render(graphs, b => b.g.value, b => b.title ? b.title.value : localName(b.g.value), 'graph'));
 }
 
 // An IRI worth following in a browser rather than in this pane. http(s)
