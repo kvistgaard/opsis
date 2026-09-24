@@ -1,0 +1,55 @@
+@prefix cfg:     <https://kvistgaard.github.io/config#> .
+@prefix rdfs:    <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix dcat:    <http://www.w3.org/ns/dcat#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+
+# Opsis reads its settings from the endpoint, not from a file beside the page.
+# Load this into your store, under any graph, and reload the browser.
+#
+# Every rule is a condition and an address. cfg:uriPrefix and cfg:fileExtension
+# are the conditions, cfg:template the address, and rdfs:label names the target
+# on the link. The longest matching prefix wins and, between equal prefixes, the
+# rule naming an extension.
+
+<https://example.org/opsis/settings>
+    a cfg:Configuration ;
+    rdfs:label "Opsis settings"@en ;
+
+    cfg:dereferenceRule [
+        a cfg:DereferenceRule ;
+        rdfs:label "Obsidian" ;
+        cfg:uriPrefix "file:///" ;
+        cfg:fileExtension "md" ;
+        cfg:template "obsidian://open?path={PATHENC}" ;
+        rdfs:comment "Obsidian finds the vault holding the path and opens the note. A file under no vault it cannot open, and the browser link beside it still can. The alternative form names a vault and a path relative to it - obsidian://open?vault=notes&file={LOCAL} with a cfg:uriPrefix ending at the vault root - which is the form to use where a vault name is stable."@en ;
+    ] ;
+
+    cfg:dereferenceRule [
+        a cfg:DereferenceRule ;
+        rdfs:label "Zotero" ;
+        cfg:uriPrefix "file:///" ;
+        cfg:fileExtension "pdf" ;
+        cfg:template "zotero://open-pdf/library/items/{LOCAL}" ;
+        rdfs:comment "Illustrative. Any application with a registered protocol handler works the same way: name the scheme it answers to and build its address out of the placeholders."@en ;
+    ] .
+
+# Placeholders, filled from the matched IRI:
+#
+#   {RAW}      the IRI as it is
+#   {URI}      the IRI percent-encoded
+#   {LOCAL}    the part after cfg:uriPrefix
+#   {PATH}     for a file: IRI, the local path decoded
+#   {PATHENC}  that path percent-encoded whole, which is what a query
+#              parameter needs
+#
+# A template resolving to javascript:, data:, blob: or vbscript: is never
+# opened, and neither is one with no scheme at all.
+
+# A second endpoint offers itself to the picker by describing itself. No term of
+# ours: this is DCAT, and the shape any catalogue already uses.
+
+<https://example.org/opsis/remote-service>
+    a dcat:DataService ;
+    dcterms:title "Published endpoint"@en ;
+    dcat:endpointURL <https://example.org/sparql> ;
+    dcat:servesDataset <https://example.org/data/catalogue> .

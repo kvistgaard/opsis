@@ -1,0 +1,8 @@
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# Author's working notes: kept private, as in the author's other repositories.
+decision-log.md
+SCALING.md

@@ -1,0 +1,1036 @@
+<!doctype html>
+<!-- Opsis 0.1.0: a faceted browser for any SPARQL 1.1 endpoint. One file, no
+     build, no dependencies, read-only. MIT licence, see LICENSE. See README.md
+     beside it for the panes, the two search paths, the date column, the open
+     rules and every cap below. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>Opsis</title>
+<meta name="description" content="A faceted browser for RDF in one HTML file. Point it at any SPARQL 1.1 endpoint and browse by class and named graph, with live counts.">
+<meta name="author" content="Ivo Velitchkov">
+<link property="author" href="https://velitchkov.eu/#me">
+<link rel="license" href="https://opensource.org/licenses/MIT">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Opsis – the one-file faceted browser for RDF graphs">
+<meta property="og:description" content="A faceted browser for RDF in one HTML file. Point it at any SPARQL 1.1 endpoint and browse by class and named graph, with live counts.">
+<meta property="og:url" content="https://kvistgaard.github.io/opsis/?endpoint=https://data.nobelprize.org/store/sparql">
+<meta property="og:image" content="https://kvistgaard.github.io/opsis/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Opsis – the one-file faceted browser for RDF graphs">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://kvistgaard.github.io/opsis/assets/og.png">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org/",
+  "@id": "https://kvistgaard.github.io/opsis/",
+  "@type": "SoftwareApplication",
+  "name": "Opsis",
+  "alternateName": "ὄψις",
+  "description": "A faceted browser for RDF in one HTML file. Point it at any SPARQL 1.1 endpoint and browse by class and named graph, with live counts.",
+  "url": "https://kvistgaard.github.io/opsis/?endpoint=https://data.nobelprize.org/store/sparql",
+  "codeRepository": "https://github.com/kvistgaard/opsis",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "Any (web browser)",
+  "softwareVersion": "0.1.0",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "programmingLanguage": ["JavaScript", "SPARQL"],
+  "keywords": ["RDF", "SPARQL", "faceted browser", "linked data", "knowledge graph"],
+  "image": "https://kvistgaard.github.io/opsis/assets/og.png",
+  "author": { "@id": "https://velitchkov.eu/#me" }
+}
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Crect width='128' height='128' rx='24' fill='%230D0F12'/%3E%3Cg fill='none' stroke-width='11'%3E%3Ccircle cx='64' cy='58.5' r='37' stroke='%23fff'/%3E%3Cpath d='M64 65.5V112' stroke='%238C929B'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --pane-w: min(560px, 88vw); --spine: 36px;
+    --bg: #fbfbfa; --panel: #fff; --ink: #1b1b1a; --muted: #6b6b68;
+    --line: #e3e3df; --accent: #2a6f97; --on-accent: #fff; --chip: #eef3f6;
+    --sb: #c6c6c1; --sb-hover: #a8a8a2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#16171a; --panel:#1d1f23; --ink:#e8e8e6; --muted:#9a9a96;
+            --line:#2c2f34; --accent:#7ab6d9; --on-accent:#16171a; --chip:#232830;
+            --sb:#3b3f46; --sb-hover:#4c515a; }
+  }
+  * { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: var(--sb) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--sb); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--sb-hover); }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { padding:14px 18px; border-bottom:1px solid var(--line);
+           display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; }
+  /* The wordmark is the mark doing duty as the O, with psis outlined to a
+     path so the header needs no webfont. Its baseline sits 34 of 114 units
+     above the box, which is what vertical-align puts back on the line. */
+  h1 { margin:0; font-size:15px; line-height:1; }
+  h1 .logo { display:inline-block; height:18px; width:auto; vertical-align:-5.4px; }
+  #status { color:var(--muted); font-size:12px; }
+  #q { margin-left:auto; padding:6px 10px; border:1px solid var(--line);
+       border-radius:6px; background:var(--panel); color:var(--ink); min-width:220px; }
+  main { display:grid; grid-template-columns:auto 1fr 1.2fr; gap:0; height:calc(100vh - 53px); }
+  section { overflow:auto; padding:12px 14px; border-right:1px solid var(--line); }
+  /* Drag the bottom-right corner of the first column to widen it. */
+  #facets { width:280px; min-width:170px; max-width:60vw; resize:horizontal; }
+  h2 { font-size:11px; text-transform:uppercase; letter-spacing:.08em;
+       color:var(--muted); margin:14px 0 6px; font-weight:600; }
+  h2:first-child { margin-top:0; }
+  /* The Entities heading is the result table's header row: the date control
+     sits above the date column, at the same inset as a row's own padding. */
+  #results h2 { display:flex; justify-content:space-between; align-items:baseline;
+                gap:10px; padding:0 6px; }
+  .facet { display:flex; justify-content:space-between; gap:8px; padding:4px 6px;
+           border-radius:4px; cursor:pointer; align-items:baseline; }
+  .facet:hover { background:var(--chip); }
+  .facet.on { background:var(--accent); color:var(--on-accent); }
+  .facet .n { color:var(--muted); font-variant-numeric:tabular-nums; font-size:12px; }
+  .facet.on .n { color:var(--on-accent); opacity:.8; }
+  .facet .ns { color:var(--muted); font-size:11px; margin-left:5px; }
+  .facet.on .ns { color:var(--on-accent); opacity:.75; }
+  .row { padding:5px 6px; border-radius:4px; cursor:pointer; }
+  .row:hover { background:var(--chip); }
+  .row .t, .t { color:var(--muted); font-size:12px; }
+  .row .r1 { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .row .d { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums;
+            white-space:nowrap; }
+  .ehead { font-size:15px; font-weight:600; margin:2px 0 2px; }
+  table { width:100%; border-collapse:collapse; }
+  td { padding:3px 6px; vertical-align:top; border-bottom:1px solid var(--line); }
+  td.p { white-space:nowrap; width:1%; }
+  a { color:var(--accent); }
+  code { font:12px/1.4 ui-monospace,Consolas,monospace; word-break:break-all; }
+  button.clear { border:0; background:none; color:var(--accent); cursor:pointer;
+                 font-size:12px; padding:0; text-transform:none; letter-spacing:normal; }
+  #catlink { font-size:12px; border:0; background:none; color:var(--accent);
+             cursor:pointer; padding:0; text-transform:none; letter-spacing:normal;
+             font-family:inherit; }
+  #catlink:hover { text-decoration:underline; }
+  /* A blank-node value (a class partition, say) is shown inline as its own
+     facts, since it has no page of its own to open. */
+  .kv .k { color:var(--muted); font-size:12px; margin-right:3px; }
+  .sep { color:var(--muted); }
+  a.lst { font-size:11px; margin-left:4px; padding:0 4px; border:1px solid var(--line);
+          border-radius:3px; text-decoration:none; }
+  /* Follow the IRI itself, where it resolves. Muted until hovered, so a list
+     of them does not read as a row of arrows. */
+  a.ext { color:var(--muted); text-decoration:none; font-size:11px; }
+  a.ext:hover { color:var(--accent); }
+  /* Copy the full IRI, whatever prefix the page shortened it to. */
+  button.copy { border:0; background:none; padding:0 2px; margin-left:3px; cursor:pointer;
+                color:var(--muted); font-size:11px; line-height:1; vertical-align:-1px; }
+  button.copy:hover, button.copy.done { color:var(--accent); }
+  /* Hand the resource to an application, per the settings' dereference rules.
+     Named rather than an arrow, because which application it goes to is the
+     thing worth seeing before clicking. */
+  a.app { color:var(--muted); text-decoration:none; font-size:11px; margin-left:4px;
+          padding:0 4px; border:1px solid var(--line); border-radius:3px; }
+  a.app:hover { color:var(--accent); border-color:var(--accent); }
+  /* A value whose rule hands it to an application: the value is the link. */
+  a.opens { color:var(--accent); text-decoration:none; }
+  a.opens:hover { text-decoration:underline; }
+  /* Only shown once the store names more than the one service it was reached
+     through, so the ordinary single-endpoint case keeps an uncluttered header. */
+  /* Stacked panes, after Andy Matuschak's notes: each entity opens in a pane
+     of fixed width beside the one it was opened from, and panes scrolled past
+     stay at the left edge as narrow spines. Off, the strip dissolves into the
+     ordinary three columns. */
+  #strip, #detail.stack { display:contents; }
+  #panes { font:inherit; font-size:12px; border:1px solid var(--line); border-radius:3px;
+           background:none; color:var(--muted); cursor:pointer; padding:0 6px; }
+  #panes[aria-pressed="true"] { color:var(--accent); border-color:var(--accent); }
+  body.stacked main { grid-template-columns:auto 1fr; }
+  body.stacked #strip { display:flex; overflow-x:auto; overflow-y:hidden;
+                        position:relative; min-width:0; height:100%; }
+  body.stacked #results, body.stacked .pane {
+    position:sticky; flex:0 0 var(--pane-w); width:var(--pane-w); height:100%;
+    overflow:auto; background:var(--bg); padding:12px 14px;
+    border-right:1px solid var(--line); box-shadow:-6px 0 10px -8px rgba(0,0,0,.4); }
+  body.stacked #results { left:0; box-shadow:none; }
+  .spine { display:none; }
+  body.stacked .pane.covered > .body,
+  body.stacked #results.covered > * { visibility:hidden; }
+  /* A covered pane stops scrolling, and its spine sits at the scroll offset it
+     was covered at (--st), so a pane read halfway down keeps its spine in view. */
+  body.stacked .pane.covered, body.stacked #results.covered { overflow:hidden; }
+  body.stacked .pane.covered > .spine, body.stacked #results.covered::before {
+    display:block; position:absolute; top:var(--st, 0px); left:0; height:100%; width:var(--spine);
+    cursor:pointer; writing-mode:vertical-rl; padding:14px 0 0 10px;
+    font-size:13px; color:var(--muted); white-space:nowrap; overflow:hidden; }
+  body.stacked #results.covered::before { content:'Entities'; }
+  .spine:hover, body.stacked #results.covered:hover::before { color:var(--accent); }
+  body.stacked .pane.here { box-shadow:-6px 0 10px -8px rgba(0,0,0,.4), inset 3px 0 0 var(--accent); }
+  #ep { font: inherit; font-size:12px; color:var(--ink); background:var(--panel);
+        border:1px solid var(--line); border-radius:3px; padding:1px 4px; max-width:22em; }
+</style>
+</head>
+<body>
+<header>
+  <h1><svg class="logo" viewBox="0 0 258 114" role="img" aria-label="Opsis">
+  <g fill="none" stroke-width="9.5">
+    <circle cx="40.5" cy="45" r="31.75" stroke="currentColor"/>
+    <path d="M40.5 51.5V102" style="stroke:var(--muted)"/>
+  </g>
+  <path fill="currentColor" d="M102.2 102V34H92.8V102ZM140.5 57Q140.5 49.4 137.4 44Q134.3 38.6 129.2 35.8Q124.1 32.9 117.9 32.9Q112.1 32.9 107.8 35.8Q103.4 38.7 101 44.1Q98.6 49.5 98.6 57Q98.6 64.4 101 69.8Q103.4 75.3 107.8 78.2Q112.1 81.1 117.9 81.1Q124.1 81.1 129.2 78.2Q134.3 75.4 137.4 69.9Q140.5 64.5 140.5 57ZM130.8 57Q130.8 62 128.8 65.4Q126.8 68.9 123.5 70.7Q120.1 72.4 116.1 72.4Q112.8 72.4 109.6 70.7Q106.3 68.9 104.3 65.4Q102.2 62 102.2 57Q102.2 52 104.3 48.6Q106.3 45.1 109.6 43.3Q112.8 41.6 116.1 41.6Q120.1 41.6 123.5 43.3Q126.8 45.1 128.8 48.6Q130.8 52 130.8 57Z M153.1 65.4 146.8 70.5Q148.5 73.1 151.2 75.6Q154 78.1 157.8 79.6Q161.6 81.2 166.3 81.2Q173.6 81.2 178 77.2Q182.4 73.3 182.4 67Q182.4 62.9 180.5 60.3Q178.5 57.7 175.3 55.8Q172 54 168.1 52.5Q165.5 51.4 163.3 50.4Q161.1 49.3 159.7 48Q158.3 46.7 158.3 44.9Q158.3 42.8 160 41.8Q161.6 40.8 164 40.8Q167.5 40.8 170.6 42.5Q173.6 44.2 175.7 46.8L181.9 41.6Q180.2 39.1 177.6 37.2Q175 35.3 171.7 34.1Q168.4 33 164.6 33Q160.7 33 157.2 34.3Q153.6 35.7 151.4 38.4Q149.3 41.2 149.3 45.3Q149.3 49.4 151.3 52Q153.3 54.7 156.4 56.4Q159.4 58 162.4 59.2Q165.3 60.2 167.7 61.4Q170 62.5 171.5 64Q172.9 65.5 172.9 67.8Q172.9 70.2 171.1 71.7Q169.3 73.1 166.1 73.1Q163.6 73.1 161.3 72.1Q158.9 71.2 156.9 69.4Q154.9 67.6 153.1 65.4Z M192.3 15.3Q192.3 17.8 194.1 19.6Q196 21.4 198.5 21.4Q201 21.4 202.8 19.6Q204.6 17.8 204.6 15.3Q204.6 12.8 202.8 11Q201 9.3 198.5 9.3Q196 9.3 194.1 11Q192.3 12.8 192.3 15.3ZM193.8 34V80H203.1V34Z M220.8 65.4 214.5 70.5Q216.2 73.1 218.9 75.6Q221.7 78.1 225.5 79.6Q229.3 81.2 234 81.2Q241.3 81.2 245.7 77.2Q250.1 73.3 250.1 67Q250.1 62.9 248.2 60.3Q246.2 57.7 243 55.8Q239.7 54 235.8 52.5Q233.2 51.4 231 50.4Q228.8 49.3 227.4 48Q226 46.7 226 44.9Q226 42.8 227.7 41.8Q229.3 40.8 231.7 40.8Q235.2 40.8 238.3 42.5Q241.3 44.2 243.4 46.8L249.6 41.6Q247.9 39.1 245.3 37.2Q242.7 35.3 239.4 34.1Q236.1 33 232.3 33Q228.4 33 224.9 34.3Q221.3 35.7 219.1 38.4Q217 41.2 217 45.3Q217 49.4 219 52Q221 54.7 224.1 56.4Q227.1 58 230.1 59.2Q233 60.2 235.4 61.4Q237.7 62.5 239.2 64Q240.6 65.5 240.6 67.8Q240.6 70.2 238.8 71.7Q237 73.1 233.8 73.1Q231.3 73.1 229 72.1Q226.6 71.2 224.6 69.4Q222.6 67.6 220.8 65.4Z"/>
+</svg></h1>
+  <span id="status">connecting…</span>
+  <select id="ep" title="Which SPARQL endpoint to read through" hidden></select>
+  <button id="panes" title="Stacked panes: open each entity beside the one it was opened from" aria-pressed="false">stack</button>
+  <button id="catlink" title="The data catalogue: every dataset, its files, graphs and record counts" hidden>catalogue</button>
+  <input id="q" placeholder="search…" autocomplete="off"
+         title="Searches every string value an entity carries, not only labels">
+</header>
+<main>
+  <section id="facets"></section>
+  <div id="strip">
+    <section id="results"></section>
+    <section id="detail"><div class="pane"><h2>Entity</h2><p style="color:var(--muted)">Pick something on the left.</p></div></section>
+  </div>
+</main>
+<script>
+// Which endpoint to read through. The URL wins, so a link can always pin one;
+// otherwise the last choice made in the picker, remembered per browser; failing
+// both, the local store. The page cannot ask the graph where the graph is, so
+// this one setting has to bootstrap outside it - unlike the open rules, which
+// the endpoint itself serves once there is an endpoint to ask.
+const REMEMBERED = 'opsis-endpoint';
+const remember = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+const recall = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const ENDPOINT = new URLSearchParams(location.search).get('endpoint')
+  || recall(REMEMBERED)
+  || 'http://localhost:7878/query';
+const PAGE = 200;
+const FACT_CAP = 300;    // facts shown for one entity
+const LINK_CAP = 200;    // incoming links shown
+const state = {cls: null, graph: null, text: '', offset: 0, sort: null};
+// The catalogue node and the authority both come from the store: whichever
+// dcat:Catalog it holds, and that node's own origin. A store with no catalogue
+// hides the button and treats every http(s) IRI as followable. Hard-coding
+// either would have made this page one graph's page.
+let CATALOGUE = null;
+let AUTHORITY = null;
+
+// An entity's date is its earliest xsd:date/xsd:dateTime value, whatever
+// property carries it (dcterms:issued, schema:startDate, anything else) -
+// generic, no vocabulary list to maintain.
+const DATE_FILTER = `FILTER(datatype(?d) = <http://www.w3.org/2001/XMLSchema#date>
+                  || datatype(?d) = <http://www.w3.org/2001/XMLSchema#dateTime>)`;
+
+// The endpoint's search sidecar, when it has one: ranked results in
+// milliseconds, labels first. The contract: GET /search?q=<text>&limit=<n> on
+// the endpoint's origin, answering {total, results: [{iri, label}]}. Detected once; without it, search falls back to
+// a SPARQL CONTAINS over every literal - slower, and unranked.
+let searchApi = null;        // URL or false once probed
+let searchHits = null;       // sidecar results for the current search term
+let searchTotal = 0;
+
+// `?search=sparql` forces the CONTAINS path. Without it the fallback is
+// unreachable wherever the sidecar answers, so nothing would ever exercise the
+// fallback, and the two could not be compared against one store.
+const FORCE_SPARQL =
+  new URLSearchParams(location.search).get('search') === 'sparql';
+
+async function probeSearchApi() {
+  if (FORCE_SPARQL) { searchApi = false; return; }
+  if (searchApi !== null) return;
+  try {
+    const u = new URL(ENDPOINT);
+    const candidate = `${u.origin}/search`;
+    const r = await fetch(`${candidate}?q=&limit=1`);
+    searchApi = r.ok ? candidate : false;
+  } catch (e) { searchApi = false; }
+}
+
+const SEARCH_CAP = 2000;
+
+// Every load takes a ticket, and only the latest ticket of its kind may write
+// to the page. Without it a slow answer for "coh" could land after the answer
+// for "cohesion" and replace it.
+const turns = {};
+const take = kind => {
+  const n = turns[kind] = (turns[kind] || 0) + 1;
+  return () => turns[kind] === n;
+};
+const fail = e => {
+  document.getElementById('status').textContent = `endpoint error: ${e.message}`;
+};
+
+// Returns false when a newer search has started, so the caller drops its hits.
+async function ensureSearch() {
+  if (!state.text || searchApi === false) { searchHits = null; searchTotal = 0; return true; }
+  const text = state.text;
+  await probeSearchApi();
+  if (!searchApi) { searchHits = null; return true; }
+  const r = await fetch(`${searchApi}?q=${encodeURIComponent(text)}&limit=${SEARCH_CAP}`);
+  const j = await r.json();
+  if (text !== state.text) return false;
+  searchHits = j.results;
+  searchTotal = j.total;
+  return true;
+}
+
+function textClause() {
+  if (!state.text) return '';
+  if (searchHits) return `VALUES ?s { ${searchHits.map(h => `<${h.iri}>`).join(' ')} }`;
+  const t = state.text.replace(/["\\]/g, '\\$&');
+  return `?s ?sfP ?sfV . FILTER(isLiteral(?sfV) && CONTAINS(LCASE(STR(?sfV)), LCASE("${t}")))`;
+}
+
+// Display prefixes. Vocabularies that declare their own prefix are read from
+// the endpoint at load (loadPrefixes), and the catalogue's authority gets the
+// empty prefix (loadCatalogue); these are the standard namespaces data rarely
+// declares.
+const PREFIXES = {
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns#': 'rdf:',
+  'http://www.w3.org/2000/01/rdf-schema#': 'rdfs:',
+  'http://www.w3.org/2002/07/owl#': 'owl:',
+  'http://www.w3.org/2001/XMLSchema#': 'xsd:',
+  'http://www.w3.org/2004/02/skos/core#': 'skos:',
+  'http://www.w3.org/ns/prov#': 'prov:',
+  'http://www.w3.org/ns/dcat#': 'dcat:',
+  'http://www.w3.org/ns/shacl#': 'sh:',
+  'http://purl.org/dc/terms/': 'dcterms:',
+  'http://purl.org/ontology/bibo/': 'bibo:',
+  'http://purl.org/vocab/vann/': 'vann:',
+  'http://rdfs.org/ns/void#': 'void:',
+  'https://schema.org/': 'schema:',
+  'http://xmlns.com/foaf/0.1/': 'foaf:',
+  'http://www.w3.org/ns/adms#': 'adms:',
+  'http://purl.org/dc/dcmitype/': 'dcmitype:',
+};
+// Longest namespace first, so a vocabulary under the authority reads as its
+// own prefix rather than as a path under the authority's empty one.
+let PREFIX_ORDER = [];
+const orderPrefixes = () =>
+  PREFIX_ORDER = Object.entries(PREFIXES).sort((a, b) => b[0].length - a[0].length);
+orderPrefixes();
+const short = u => {
+  let s = String(u);
+  for (const [ns, pfx] of PREFIX_ORDER) {
+    if (s.startsWith(ns)) return pfx + s.slice(ns.length);
+  }
+  return s;
+};
+
+// Every ontology in the store declares its prefix (vann, or sh:declare in a
+// shapes document), so the map comes from the data rather than from a list
+// kept in step by hand. Failure is not fatal: the built-in map still reads.
+// Settings load once per page, but only an attempt that actually reached the
+// endpoint counts. A launcher may start the endpoint and open the page in the
+// same breath, so the first query can land before the store is up: latching the
+// flag on the attempt rather than on the result left the page connected and
+// ruleless for the rest of the session - facets and search worked, and the
+// application links were simply never there. A failed attempt is retried on the
+// next refresh; one already in flight is shared rather than repeated.
+let settingsLoaded = false, settingsInFlight = null;
+function loadSettings() {
+  if (settingsLoaded) return Promise.resolve();
+  if (!settingsInFlight) {
+    settingsInFlight = Promise.all([loadPrefixes(), loadOpenRules(),
+                                    loadEndpoints(), loadCatalogue()])
+      .then(ok => { settingsLoaded = ok.every(Boolean); })
+      .finally(() => { settingsInFlight = null; });
+  }
+  return settingsInFlight;
+}
+// The endpoints on offer are the ones the catalogue already describes: DCAT's
+// own dcat:DataService and dcat:endpointURL. No term of our own, because a query service is exactly what DCAT is for - and because a
+// second endpoint then advertises itself to this page merely by describing
+// itself the way any catalogue would. The picker stays hidden while the store
+// names only the endpoint the page is already reading through.
+// The catalogue the store describes, if it describes one, and the origin it
+// was minted under. Both are data, so pointing this page at someone else's
+// graph needs no edit to it.
+async function loadCatalogue() {
+  const btn = document.getElementById('catlink');
+  try {
+    const rows = await sparql(`SELECT ?c WHERE {
+      ?c a <http://www.w3.org/ns/dcat#Catalog> } ORDER BY ?c LIMIT 1`);
+    if (!rows.length) { btn.hidden = true; return true; }
+    CATALOGUE = rows[0].c.value;
+    try { AUTHORITY = new URL(CATALOGUE).origin + '/'; } catch (e) { AUTHORITY = null; }
+    if (AUTHORITY && !(AUTHORITY in PREFIXES)) { PREFIXES[AUTHORITY] = ''; orderPrefixes(); }
+    btn.hidden = false;
+    return true;
+  } catch (e) { btn.hidden = true; return false; }
+}
+
+async function loadEndpoints() {
+  const sel = document.getElementById('ep');
+  try {
+    const rows = await sparql(`PREFIX dcat: <http://www.w3.org/ns/dcat#>
+      PREFIX dcterms: <http://purl.org/dc/terms/>
+      SELECT DISTINCT ?url ?title WHERE {
+        ?svc a dcat:DataService ; dcat:endpointURL ?url .
+        OPTIONAL { ?svc dcterms:title ?title }
+      } ORDER BY ?title`);
+    const seen = new Map();
+    for (const b of rows) seen.set(b.url.value, b.title ? b.title.value : b.url.value);
+    if (!seen.has(ENDPOINT)) seen.set(ENDPOINT, ENDPOINT);
+    if (seen.size < 2) { sel.hidden = true; return true; }
+    sel.innerHTML = [...seen].map(([url, title]) =>
+      `<option value="${esc(url)}"${url === ENDPOINT ? ' selected' : ''}
+               title="${esc(url)}">${esc(title)}</option>`).join('');
+    sel.hidden = false;
+    return true;
+  } catch (e) { sel.hidden = true; return false; }
+}
+
+async function loadPrefixes() {
+  try {
+    const rows = await sparql(`SELECT DISTINCT ?ns ?prefix WHERE {
+      { ?o <http://purl.org/vocab/vann/preferredNamespaceUri> ?ns ;
+           <http://purl.org/vocab/vann/preferredNamespacePrefix> ?prefix }
+      UNION
+      { ?d <http://www.w3.org/ns/shacl#declare> ?decl .
+        ?decl <http://www.w3.org/ns/shacl#namespace> ?ns ;
+              <http://www.w3.org/ns/shacl#prefix> ?prefix }
+    }`);
+    for (const b of rows) {
+      const ns = String(b.ns.value), pfx = String(b.prefix.value);
+      if (ns && pfx && !(ns in PREFIXES)) PREFIXES[ns] = pfx + ':';
+    }
+    orderPrefixes();
+    return true;
+  } catch (e) { return false; /* the built-in map still reads */ }
+}
+const localName = u => {
+  const s = String(u);
+  const cut = Math.max(s.lastIndexOf('#'), s.lastIndexOf('/'));
+  return (cut >= 0 ? s.slice(cut + 1) : s) || s;
+};
+// The namespace part of a shortened IRI: which vocabulary a facet belongs to,
+// and what tells apart two facets sharing a label (owl:Class and rdfs:Class
+// are both labelled "Class"). A namespace that declares no prefix falls back
+// to the last segment of its IRI, and the authority's own to its host name;
+// the full IRI is always in the hover.
+const nsHint = u => {
+  const s = short(u);
+  const local = localName(u);
+  const ns = s.slice(0, s.length - local.length).replace(/[#/:]+$/, '')
+              .replace(/^https?:\/\//, '');
+  if (!ns) return AUTHORITY ? new URL(AUTHORITY).hostname.replace(/^www\./, '') : '';
+  return ns.includes('/') ? ns.split('/').filter(Boolean).pop() : ns;
+};
+const esc = s => String(s).replace(/[&<>"]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// Queries go as a form field, the SPARQL protocol's most widely accepted POST.
+// Some public endpoints refuse a bare application/sparql-query body, and a
+// form post also needs no CORS preflight.
+// An endpoint that stops a query at its time limit may still answer, with 206
+// and whatever it had so far (Virtuoso does). The rows are kept and the status
+// line says the counts may be short, rather than passing them off as complete.
+let partial = false;
+async function sparql(query) {
+  const r = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: {'Accept': 'application/sparql-results+json'},
+    body: new URLSearchParams({query}),
+  });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  if (r.status === 206) partial = true;
+  return (await r.json()).results.bindings;
+}
+
+// Filters are built once and shared by the facet counts and the result list, so
+// a count can never promise rows the list does not then show. A facet applies
+// every filter but its own: clicking one of its values replaces that filter,
+// so the count beside the value is the length of the list the click opens.
+function filters(except) {
+  const out = [];
+  if (state.cls && except !== 'cls') out.push(`?s a/rdfs:subClassOf* <${state.cls}> .`);
+  if (state.graph && except !== 'graph') out.push(`GRAPH <${state.graph}> { ?s ?anyP ?anyO }`);
+  const t = textClause();
+  if (t) out.push(t);
+  return out.join('\n  ');
+}
+
+const PREFIX = 'PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n';
+
+// Every action on a listed entity addresses it by IRI - the detail pane, the
+// date lookup, the backlinks - so a blank node cannot be listed. The sidecar
+// skips them when it indexes; the SPARQL paths have to be told. Without this
+// the CONTAINS scan listed two blank subjects for "cohesion" and the date
+// lookup then built <b0>, which the endpoint rejects.
+const IRI_ONLY = 'FILTER(isIRI(?s))';
+const whereWith = extra => `${filters() || '?s a ?anyClass .'}\n  ${IRI_ONLY}${extra || ''}`;
+
+// Labels and titles are looked up after counting, in the outer query. Joined
+// inside the aggregate, the title lookup ran once per quad: the graph facet
+// took ten times as long that way, for the same rows. Both count IRI subjects
+// only, as the list does; counting blank nodes made a graph's facet promise
+// several times the entities its list then showed.
+async function loadFacets(current) {
+  const [classes, graphs] = await Promise.all([
+    sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
+      { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
+          ${filters('cls')}
+          ?s a ?leaf .
+          ?leaf rdfs:subClassOf* ?c .
+          FILTER(isIRI(?c) && isIRI(?s))
+        } GROUP BY ?c ORDER BY DESC(?n) LIMIT 40 }
+      OPTIONAL { ?c rdfs:label ?l }
+    } GROUP BY ?c ?n ORDER BY DESC(?n)`),
+    sparql(`${PREFIX}SELECT ?g ?n (SAMPLE(?t) AS ?title) WHERE {
+      { SELECT ?g (COUNT(DISTINCT ?s) AS ?n) WHERE {
+          ${filters('graph')}
+          GRAPH ?g { ?s ?gp ?go }
+          FILTER(isIRI(?s))
+        } GROUP BY ?g }
+      OPTIONAL { ?g <http://purl.org/dc/terms/title> ?t }
+    } GROUP BY ?g ?n ORDER BY DESC(?n)`),
+  ]);
+  if (!current()) return;
+  // Every class carries its namespace hint, so the vocabulary a class belongs
+  // to reads off the list rather than out of the hover. Graph names share one
+  // namespace, so there the hint appears only where two share a title.
+  const render = (rows, iriOf, nameOf, key, always) => {
+    const seen = {};
+    for (const b of rows) { const nm = nameOf(b); seen[nm] = (seen[nm] || 0) + 1; }
+    return rows.map(b => {
+      const v = iriOf(b), nm = nameOf(b);
+      const hint = (always || seen[nm] > 1) ? `<span class="ns">· ${esc(nsHint(v))}</span>` : '';
+      return `<div class="facet ${state[key] === v ? 'on' : ''}" data-key="${key}"
+                   data-v="${esc(v)}" title="${esc(v)}">
+                <span>${esc(nm)}${hint}</span><span class="n">${b.n.value}</span></div>`;
+    }).join('');
+  };
+  document.getElementById('facets').innerHTML =
+    `<h2>Class ${state.cls ? '<button class="clear" data-clear="cls">clear</button>' : ''}</h2>` +
+    render(classes, b => b.c.value, b => b.label ? b.label.value : localName(b.c.value), 'cls', true) +
+    `<h2>Graph ${state.graph ? '<button class="clear" data-clear="graph">clear</button>' : ''}</h2>` +
+    render(graphs, b => b.g.value, b => b.title ? b.title.value : localName(b.g.value), 'graph');
+}
+
+// An IRI worth following in a browser rather than in this pane. http(s)
+// outside the store's own authority resolves today: a deck on github.io, a term
+// in schema.org, a person's #me, a file from a local server. The authority's
+// own IRIs are the ones a personal graph typically does not serve, so an arrow
+// there would promise a 404, and it is left off until the day it does serve.
+// A file: locator opens only from a page that is itself on file:, which is how
+// this one is normally opened, so the arrow appears where it works and nowhere
+// else.
+const isLocalFile = iri => iri.startsWith('file:');
+const followable = iri =>
+  (/^https?:\/\//.test(iri) && !(AUTHORITY && iri.startsWith(AUTHORITY))) ||
+  (isLocalFile(iri) && location.protocol === 'file:');
+// A file: link opens in this tab, everything else in a new one. Chrome refuses
+// to load a file: URL into a tab opened by a page - measured: the tab appears
+// and the load aborts - while a plain same-tab click to file: from a file:
+// page is allowed. So the target attribute is the difference between a
+// document that opens and one that silently does not. A binary the browser
+// cannot render (.pptx, .epub) turns the click into a download and leaves this
+// page where it was; a .pdf, .md or .html replaces it, and Back returns.
+// Marked with a class the click handler lets through untouched, so following
+// the link never also opens the entity pane behind it.
+// Where a resource is opened, from the settings in the store: a
+// cfg:dereferenceRule matches on cfg:uriPrefix and, optionally,
+// cfg:fileExtension, and its cfg:template builds the address (nodica's
+// vocabulary; settings.example.ttl shows the shape). The longest
+// matching prefix wins and, between equal prefixes, the rule naming an
+// extension - so Markdown can go to a note editor while its neighbours stay
+// with the browser. A settings change reaches the page at the next store
+// build; an endpoint carrying no settings leaves every link as it was.
+let openRules = [];
+async function loadOpenRules() {
+  try {
+    const rows = await sparql(`PREFIX cfg: <https://kvistgaard.github.io/config#>
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+      SELECT ?prefix ?ext ?template ?label WHERE {
+        ?config a cfg:Configuration ; cfg:dereferenceRule ?rule .
+        ?rule cfg:template ?template .
+        OPTIONAL { ?rule cfg:uriPrefix ?prefix }
+        OPTIONAL { ?rule cfg:fileExtension ?ext }
+        OPTIONAL { ?rule rdfs:label ?label }
+      }`);
+    openRules = rows.map(b => ({
+      prefix: b.prefix ? b.prefix.value : '',
+      ext: b.ext ? b.ext.value.toLowerCase().replace(/^\./, '') : '',
+      template: b.template.value,
+      label: b.label ? b.label.value : 'open',
+    })).sort((a, b) => b.prefix.length - a.prefix.length || (b.ext ? 1 : 0) - (a.ext ? 1 : 0));
+    return true;
+  } catch (e) { openRules = []; return false; }
+}
+
+// A template resolving to one of these is never opened: they would execute in
+// this page rather than address a resource outside it.
+const BAD_SCHEME = /^(javascript|data|blob|vbscript):/i;
+// The winning rule's address, placeholders filled. {RAW}, {URI} and {LOCAL}
+// are nodica's; {PATH} and {PATHENC} exist because a desktop application is
+// addressed by a path and not by a URI.
+function appLink(iri) {
+  for (const r of openRules) {
+    if (r.prefix && !iri.startsWith(r.prefix)) continue;
+    if (r.ext && !iri.split(/[?#]/)[0].toLowerCase().endsWith('.' + r.ext)) continue;
+    let path = '', pathenc = '';
+    if (isLocalFile(iri)) {
+      // file:///C:/a/b.md -> C:/a/b.md, file:///home/a/b.md -> /home/a/b.md:
+      // the slash before a drive letter belongs to the URI, not to the path.
+      try {
+        let rest = iri.replace(/^file:\/\/(localhost)?/i, '').split(/[?#]/)[0];
+        if (/^\/[A-Za-z]:/.test(rest)) rest = rest.slice(1);
+        path = decodeURIComponent(rest);
+        pathenc = encodeURIComponent(path);
+      } catch (e) { path = pathenc = ''; }
+    }
+    const url = r.template
+      .split('{RAW}').join(iri)
+      .split('{URI}').join(encodeURIComponent(iri))
+      .split('{LOCAL}').join(r.prefix ? iri.slice(r.prefix.length) : iri)
+      .split('{PATHENC}').join(pathenc)
+      .split('{PATH}').join(path);
+    if (BAD_SCHEME.test(url) || !/^[a-z][a-z0-9+.-]*:/i.test(url)) return null;
+    return { url, label: r.label };
+  }
+  return null;
+}
+
+// The arrow follows the IRI in the browser, in a new tab, so the page and its
+// queries are still there afterwards. A file: URL opens in a tab the page
+// opened as readily as any other - a target=_blank link from a file: page
+// opens the file in a new tab - so nothing here
+// needs the same-tab special case the earlier version carried.
+// The named link stays beside a value that already opens the application: both
+// go to the same place, and the name is what says where the click will land.
+const followLink = iri => {
+  const app = appLink(iri);
+  const appHtml = app
+    ? ` <a class="app" href="${esc(app.url)}"
+             title="Open ${esc(iri)} in ${esc(app.label)}">${esc(app.label)}</a>`
+    : '';
+  if (!followable(iri)) return appHtml;
+  return ` <a class="ext" href="${esc(iri)}" target="_blank" rel="noopener"
+              title="Open ${esc(iri)} in a new tab">↗</a>` + appHtml;
+};
+
+const COPY_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" fill="none" ' +
+  'stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="5.5" width="8.5" height="8.5" rx="1.5"/>' +
+  '<path d="M10.5 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5"/></svg>';
+const copyButton = iri =>
+  `<button class="copy" data-copy="${esc(iri)}" title="Copy ${esc(iri)}" aria-label="Copy IRI">${COPY_ICON}</button>`;
+// The clipboard API wants a secure context; where it refuses, the older
+// selection copy still works.
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); }
+  catch (e) {
+    const area = document.createElement('textarea');
+    area.value = text;
+    document.body.append(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  }
+}
+
+const rowHtml = (iri, label, date) =>
+  `<div class="row" data-iri="${esc(iri)}">
+     <div class="r1"><span>${esc(label || short(iri))}</span>${
+       date ? `<span class="d">${esc(date)}</span>` : ''}</div>
+     <div class="t"><code>${esc(short(iri))}</code>${copyButton(iri)}${followLink(iri)}</div></div>`;
+
+// Dates for just the visible page - one VALUES query over 200 subjects,
+// so the default view never pays for a store-wide date scan.
+async function attachDates(rows) {
+  // An IRI carrying whitespace or angle brackets would break out of the
+  // VALUES block; drop it rather than send a malformed query.
+  const safe = rows.filter(r => /^[a-z][a-z0-9+.-]*:/i.test(r.iri) && !/[\s<>"{}|^`]/.test(r.iri));
+  if (!safe.length) return;
+  const dates = await sparql(`SELECT ?s (MIN(?d) AS ?date) WHERE {
+    VALUES ?s { ${safe.map(r => `<${r.iri}>`).join(' ')} }
+    ?s ?dp ?d . ${DATE_FILTER}
+  } GROUP BY ?s`);
+  const byIri = Object.fromEntries(dates.map(b => [b.s.value, b.date.value.slice(0, 10)]));
+  for (const r of rows) r.date = byIri[r.iri];
+}
+
+async function loadResults(append, current) {
+  let rows, total;
+  // The sidecar returns at most SEARCH_CAP hits, and every path that uses them
+  // - the ranked list, the facet counts, the joins - sees only those.
+  const note = state.text && searchHits && searchTotal > searchHits.length
+    ? `; search uses the first ${searchHits.length} of ${searchTotal} matches` : '';
+  if (state.text && searchHits && !state.cls && !state.graph && !state.sort) {
+    // Pure search: page the sidecar's ranked hits directly, label matches
+    // first. SPARQL can rank the same way, at ~150ms a keystroke plus a
+    // second scan for the total; the sidecar does both at once.
+    rows = searchHits.slice(state.offset, state.offset + PAGE)
+                     .map(h => ({ iri: h.iri, label: h.label }));
+    total = searchHits.length;
+    await attachDates(rows);
+  } else if (!state.sort) {
+    // The page is chosen by IRI first and labelled after, so an entity with
+    // two labels takes one row rather than two.
+    const where = whereWith();
+    const [countRows, pageRows] = await Promise.all([
+      append ? Promise.resolve(null)
+             : sparql(`${PREFIX}SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ${where} }`),
+      sparql(`${PREFIX}SELECT ?s (SAMPLE(?l) AS ?label) WHERE {
+        { SELECT DISTINCT ?s WHERE { ${where} } ORDER BY ?s LIMIT ${PAGE} OFFSET ${state.offset} }
+        OPTIONAL { ?s rdfs:label ?l }
+      } GROUP BY ?s ORDER BY ?s`),
+    ]);
+    if (!current()) return;
+    if (countRows) state.total = parseInt(countRows[0].n.value, 10);
+    total = state.total;
+    rows = pageRows.map(b => ({ iri: b.s.value, label: b.label ? b.label.value : null }));
+    await attachDates(rows);
+  } else {
+    // Date sort: the order must exist before LIMIT/OFFSET, so this is the one
+    // path that scans every matching entity for its earliest date (~500 ms
+    // store-wide). Undated entities sink to the end under either direction.
+    const where = whereWith();
+    const order = `DESC(BOUND(?date)) ${state.sort === 'asc' ? 'ASC' : 'DESC'}(?date) ?s`;
+    const [countRows, pageRows] = await Promise.all([
+      append ? Promise.resolve(null)
+             : sparql(`${PREFIX}SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ${where} }`),
+      sparql(`${PREFIX}SELECT ?s ?date (SAMPLE(?l) AS ?label) WHERE {
+        { SELECT ?s (MIN(?d) AS ?date) WHERE {
+            ${where}
+            OPTIONAL { ?s ?dp ?d . ${DATE_FILTER} }
+          } GROUP BY ?s
+          ORDER BY ${order} LIMIT ${PAGE} OFFSET ${state.offset} }
+        OPTIONAL { ?s rdfs:label ?l }
+      } GROUP BY ?s ?date ORDER BY ${order}`),
+    ]);
+    if (!current()) return;
+    if (countRows) state.total = parseInt(countRows[0].n.value, 10);
+    total = state.total;
+    rows = pageRows.map(b => ({ iri: b.s.value,
+                                label: b.label ? b.label.value : null,
+                                date: b.date ? b.date.value.slice(0, 10) : null }));
+  }
+  if (!current()) return;
+  const shown = state.offset + rows.length;
+  const glyph = state.sort === 'desc' ? '▼' : state.sort === 'asc' ? '▲' : '⇅';
+  const header = `<h2><span>Entities (${total ? `showing 1–${shown} of ${total}` : '0'}${note})</span>
+    <button class="clear" id="sortd" title="Sort by date: newest first / oldest first / off">date ${glyph}</button></h2>`;
+  const body = rows.map(r => rowHtml(r.iri, r.label, r.date)).join('');
+  const more = shown < total
+    ? `<div class="row" id="more" style="color:var(--accent)">Load ${Math.min(PAGE, total - shown)} more…</div>` : '';
+  const el = document.getElementById('results');
+  if (append) {
+    document.getElementById('more')?.remove();
+    el.querySelector('h2').outerHTML = header;
+    el.insertAdjacentHTML('beforeend', body + more);
+  } else {
+    el.innerHTML = header +
+      (rows.length ? body + more
+        : '<p style="color:var(--muted)">Nothing matches these facets.</p>');
+  }
+}
+
+async function loadDetail(iri, pane) {
+  // A blank-node value cannot be opened, so its own facts are fetched by a
+  // second query and render inline: a dataset's class partition reads as
+  // "class ResearchNote · instance count 23", with a link to list them. A
+  // separate query rather than an OPTIONAL with a FILTER on the outer value:
+  // Oxigraph evaluates that by materialising every triple first, and gave no
+  // answer in two minutes where the two queries below take a fraction of a second.
+  // Each list asks for one row past its cap, which is how the pane knows to
+  // say it stopped short.
+  const [factRows, nestedRows, incomingRows] = await Promise.all([
+    sparql(`${PREFIX}SELECT ?p ?o ?g (SAMPLE(?pl) AS ?plabel) (SAMPLE(?ol) AS ?olabel) WHERE {
+      GRAPH ?g { <${iri}> ?p ?o }
+      OPTIONAL { ?p rdfs:label ?pl }
+      OPTIONAL { ?o rdfs:label ?ol }
+    } GROUP BY ?p ?o ?g ORDER BY ?p LIMIT ${FACT_CAP + 1}`),
+    sparql(`${PREFIX}SELECT ?p ?b ?g ?p2 ?o2 (SAMPLE(?p2l) AS ?p2label) (SAMPLE(?o2l) AS ?o2label) WHERE {
+      GRAPH ?g { <${iri}> ?p ?b . ?b ?p2 ?o2 . FILTER(isBlank(?b)) }
+      OPTIONAL { ?p2 rdfs:label ?p2l }
+      OPTIONAL { ?o2 rdfs:label ?o2l }
+    } GROUP BY ?p ?b ?g ?p2 ?o2 ORDER BY ?p ?b ?p2 LIMIT 300`),
+    sparql(`${PREFIX}SELECT ?s ?p ?g (SAMPLE(?sl) AS ?slabel) (SAMPLE(?pl) AS ?plabel) WHERE {
+      GRAPH ?g { ?s ?p <${iri}> }
+      OPTIONAL { ?s rdfs:label ?sl }
+      OPTIONAL { ?p rdfs:label ?pl }
+    } GROUP BY ?s ?p ?g ORDER BY ?p LIMIT ${LINK_CAP + 1}`),
+  ]);
+  // A pane closed or replaced while its queries ran is no longer on the page.
+  if (!pane.isConnected) return;
+  const facts = factRows.slice(0, FACT_CAP);
+  const incoming = incomingRows.slice(0, LINK_CAP);
+  const moreFacts = factRows.length > FACT_CAP;
+  const moreLinks = incomingRows.length > LINK_CAP;
+  // Fold each blank node's facts into its row. Matched by the blank node's
+  // label when the endpoint keeps labels stable across queries (Oxigraph
+  // does), otherwise by position under the same property.
+  const nestedGroups = new Map();
+  for (const r of nestedRows) {
+    const key = `${r.p.value}|${r.g.value}|${r.b.value}`;
+    if (!nestedGroups.has(key)) nestedGroups.set(key, []);
+    nestedGroups.get(key).push(r);
+  }
+  const seenUnder = {};
+  for (const row of facts) {
+    row.inner = [];
+    if (row.o.type !== 'bnode') continue;
+    const under = `${row.p.value}|${row.g.value}`;
+    const exact = nestedGroups.get(`${under}|${row.o.value}`);
+    if (exact) { row.inner = exact; continue; }
+    const groups = [...nestedGroups.entries()].filter(([k]) => k.startsWith(under + '|')).map(([, v]) => v);
+    const n = seenUnder[under] = (seenUnder[under] || 0) + 1;
+    row.inner = groups[n - 1] || [];
+  }
+  // Properties and linked resources read by their labels, exactly as the class
+  // facets do; the IRI is one hover away.
+  const propCell = r =>
+    `<td class="p" title="${esc(r.p.value)}">${esc(r.plabel ? r.plabel.value : localName(r.p.value))}</td>`;
+  // Where a rule hands the resource to an application, the value itself is that
+  // link: opening a note means clicking the note, not finding a second small
+  // link beside it. What is given up is the node page for that IRI, which for a
+  // file: locator is no loss - a file path locates a resource, it does not
+  // identify one.
+  // Everything with no rule keeps the graph link it had.
+  const iriLink = (v, label) => {
+    const app = appLink(v);
+    if (app) {
+      return `<a class="opens" href="${esc(app.url)}"
+                 title="Open in ${esc(app.label)}: ${esc(v)}">${esc(label || short(v))}</a>`
+        + followLink(v);
+    }
+    return `<a href="#" data-iri="${esc(v)}" title="${esc(v)}">${esc(label || short(v))}</a>`
+      + followLink(v);
+  };
+  const innerHtml = rows => rows.map(r => {
+    const k = esc(r.p2label ? r.p2label.value : localName(r.p2.value));
+    let v = r.o2.type === 'uri' ? iriLink(r.o2.value, r.o2label && r.o2label.value) : esc(r.o2.value);
+    if (r.p2.value === 'http://rdfs.org/ns/void#class' && r.o2.type === 'uri')
+      v += `<a href="#" class="lst" data-cls="${esc(r.o2.value)}" title="List every entity of this class">list</a>`;
+    return `<span class="kv"><span class="k">${k}</span>${v}</span>`;
+  }).join('<span class="sep"> · </span>');
+  const objCell = r => r.o.type === 'uri'
+    ? iriLink(r.o.value, r.olabel && r.olabel.value)
+    : r.o.type === 'bnode'
+      ? (r.inner.length ? innerHtml(r.inner) : '<span class="t">[blank node]</span>')
+      : esc(r.o.value);
+  const labelRow = facts.find(r => r.p.value === 'http://www.w3.org/2000/01/rdf-schema#label');
+  const heading = labelRow ? labelRow.o.value : localName(iri);
+  pane.querySelector('.spine').textContent = heading;
+  pane.querySelector('.body').innerHTML =
+    `<h2>Entity</h2>` +
+    `<p class="ehead">${esc(heading)}</p>` +
+    `<p><code title="${esc(iri)}">${esc(short(iri))}</code>${copyButton(iri)}${followLink(iri)}</p>` +
+    `<p class="t">${moreFacts ? `the first ${FACT_CAP}` : facts.length} facts across ` +
+    `${new Set(facts.map(r => r.g.value)).size} graph(s)` +
+    (incoming.length ? `; linked from ${moreLinks ? `more than ${LINK_CAP}` : incoming.length} place(s)` : '') +
+    (moreFacts || moreLinks ? '; the rest are not shown' : '') + `</p>` +
+    `<table>` + facts.map(r =>
+      `<tr>${propCell(r)}<td>${objCell(r)}
+        <div class="t" style="font-size:11px" title="${esc(r.g.value)}">${esc(localName(r.g.value))}</div></td></tr>`).join('') +
+    `</table>` +
+    (incoming.length ? `<h2>Linked from</h2><table>` + incoming.map(r =>
+      `<tr><td class="p" title="${esc(r.p.value)}">${esc(r.plabel ? r.plabel.value : localName(r.p.value))}</td>
+        <td>${r.s.type === 'bnode'
+          // A blank node has no IRI to open a pane on, so it is named, not linked.
+          ? '<span class="t">[blank node]</span>'
+          : `<a href="#" data-iri="${esc(r.s.value)}" title="${esc(r.s.value)}">${esc(r.slabel ? r.slabel.value : short(r.s.value))}</a>${followLink(r.s.value)}`}
+        <div class="t" style="font-size:11px" title="${esc(r.g.value)}">${esc(localName(r.g.value))}</div></td></tr>`).join('') +
+      `</table>` : '');
+}
+
+async function refresh() {
+  const s = document.getElementById('status');
+  const current = take('refresh');
+  try {
+    s.textContent = 'querying…';
+    partial = false;
+    state.offset = 0;
+    await loadSettings();
+    if (!await ensureSearch() || !current()) return;
+    await Promise.all([loadFacets(take('facets')), loadResults(false, take('results'))]);
+    if (!current()) return;
+    const scan = searchApi === false && state.text
+      ? (FORCE_SPARQL ? ' (forced SPARQL scan)' : ' (no search sidecar; SPARQL scan)')
+      : '';
+    const cut = partial ? ' – the endpoint cut some answers short; counts may be incomplete' : '';
+    s.textContent = `connected to ${ENDPOINT}${scan}${cut}`;
+  } catch (e) {
+    if (current()) fail(e);
+  }
+}
+
+document.addEventListener('click', e => {
+  // An external link is the browser's business: no preventDefault, and no
+  // walking on to the data-iri handler that would open the entity pane too.
+  if (e.target.closest('a.ext, a.app, a.opens')) return;
+  // Copying never opens the row the button sits in.
+  const copy = e.target.closest('button.copy');
+  if (copy) {
+    copyText(copy.dataset.copy).then(() => {
+      copy.classList.add('done');
+      copy.textContent = '✓';
+      setTimeout(() => { copy.classList.remove('done'); copy.innerHTML = COPY_ICON; }, 1200);
+    });
+    return;
+  }
+  if (e.target.id === 'more') {
+    state.offset += PAGE;
+    loadResults(true, take('results')).catch(fail);
+    return;
+  }
+  if (e.target.id === 'sortd') {
+    state.sort = state.sort === 'desc' ? 'asc' : state.sort === 'asc' ? null : 'desc';
+    state.offset = 0;
+    loadResults(false, take('results')).catch(fail);
+    return;
+  }
+  const clear = e.target.closest('[data-clear]');
+  if (clear) { state[clear.dataset.clear] = null; refresh(); return; }
+  if (e.target.id === 'catlink') { if (CATALOGUE) openEntity(CATALOGUE, null); return; }
+  if (e.target.id === 'panes') { setStacked(!stacked); return; }
+  const spine = e.target.closest('.spine');
+  if (spine) { reveal(spine.parentElement); return; }
+  // The list's spine is drawn by CSS, and its hidden rows take no clicks, so a
+  // click on it lands on the list itself.
+  if (e.target === results && results.classList.contains('covered')) {
+    strip.scrollTo({ left: 0, behavior: 'smooth' });
+    return;
+  }
+  // "list" beside a class partition: the menu opens on that dish.
+  const cls = e.target.closest('[data-cls]');
+  if (cls) {
+    e.preventDefault();
+    state.cls = cls.dataset.cls; state.graph = null; state.text = ''; state.sort = null;
+    document.getElementById('q').value = '';
+    refresh();
+    return;
+  }
+  const f = e.target.closest('.facet');
+  if (f) { state[f.dataset.key] = state[f.dataset.key] === f.dataset.v ? null : f.dataset.v;
+           refresh(); return; }
+  const link = e.target.closest('[data-iri]');
+  if (link) { e.preventDefault(); openEntity(link.dataset.iri, link.closest('.pane')); }
+});
+// Switching endpoint reloads rather than re-querying in place: prefixes, open
+// rules, the search sidecar and every count belong to the store just left, and
+// a reload is the one way to be sure none of them survives the move. The choice
+// goes into the URL as well as into storage, so the address bar keeps saying
+// which store is on screen and the link can be handed to someone else.
+document.getElementById('ep').addEventListener('change', e => {
+  const url = e.target.value;
+  remember(REMEMBERED, url);
+  const params = new URLSearchParams(location.search);
+  params.set('endpoint', url);
+  location.search = params.toString();
+});
+let timer;
+document.getElementById('q').addEventListener('input', e => {
+  clearTimeout(timer);
+  timer = setTimeout(() => { state.text = e.target.value.trim(); refresh(); }, 300);
+});
+// The panes. Single, a new entity replaces the one pane there is. Stacked, an
+// entity opened from pane k replaces everything right of k, as in Matuschak's
+// notes, and one opened from the list, the facets or the header starts a new
+// stack. An entity already open is scrolled to rather than opened twice. Each
+// pane runs its own queries once, when it opens; closing panes is only DOM
+// removal, so walking back and forth costs nothing.
+const PANES = 'opsis-panes';
+const detail = document.getElementById('detail');
+const strip = document.getElementById('strip');
+const results = document.getElementById('results');
+let stacked = (new URLSearchParams(location.search).get('panes') || recall(PANES)) === 'stacked';
+const panes = () => [...detail.querySelectorAll('.pane[data-iri]')];
+
+function newPane(iri) {
+  const p = document.createElement('div');
+  p.className = 'pane';
+  p.dataset.iri = iri;
+  p.innerHTML = `<div class="spine" title="${esc(iri)}">${esc(short(iri))}</div>` +
+    `<div class="body"><h2>Entity</h2><p class="t">loading…</p></div>`;
+  return p;
+}
+
+function openEntity(iri, from) {
+  detail.querySelectorAll('.pane:not([data-iri])').forEach(p => p.remove());
+  const open = panes();
+  if (stacked) {
+    const already = open.find(p => p.dataset.iri === iri);
+    if (already) { reveal(already); return; }
+    const k = from ? open.indexOf(from) : -1;
+    open.slice(k + 1).forEach(p => p.remove());
+  } else {
+    detail.replaceChildren();
+  }
+  const p = newPane(iri);
+  detail.append(p);
+  loadDetail(iri, p).catch(fail);
+  layout();
+  reveal(p);
+  syncUrl();
+}
+
+// A pane's sticky offset is its place in the stack times the spine width, so
+// every pane scrolled past stays behind as a spine of its own.
+function layout() {
+  panes().forEach((p, i) => { p.style.left = stacked ? `calc(${i + 1} * var(--spine))` : ''; });
+  cover();
+}
+function reveal(p) {
+  panes().forEach(q => q.classList.toggle('here', stacked && q === p));
+  if (!stacked) return;
+  // A sticky pane reports where it is stuck, not where it sits in the row, so
+  // its place is summed from the widths before it.
+  const before = panes().slice(0, panes().indexOf(p));
+  const at = before.reduce((x, q) => x + q.offsetWidth, results.offsetWidth);
+  const spine = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--spine')) || 36;
+  strip.scrollTo({ left: Math.max(0, at - (before.length + 1) * spine), behavior: 'smooth' });
+}
+// A pane is covered once the next one has slid over most of it; it then
+// shows its title on the spine instead of a sliver of its content.
+function cover() {
+  const all = [results, ...panes()];
+  all.forEach((p, i) => {
+    const next = all[i + 1];
+    const covered = stacked && !!next &&
+      next.getBoundingClientRect().left - p.getBoundingClientRect().left < p.offsetWidth / 2;
+    if (covered && !p.classList.contains('covered')) p.style.setProperty('--st', `${p.scrollTop}px`);
+    p.classList.toggle('covered', covered);
+  });
+}
+let coverFrame = 0;
+const coverSoon = () => { cancelAnimationFrame(coverFrame); coverFrame = requestAnimationFrame(cover); };
+strip.addEventListener('scroll', coverSoon, { passive: true });
+addEventListener('resize', coverSoon);
+
+function setStacked(on) {
+  stacked = on;
+  remember(PANES, on ? 'stacked' : 'single');
+  document.body.classList.toggle('stacked', on);
+  detail.classList.toggle('stack', on);
+  document.getElementById('panes').setAttribute('aria-pressed', String(on));
+  if (!on) panes().slice(0, -1).forEach(p => p.remove());
+  layout();
+  syncUrl();
+}
+
+// The open panes live in the URL, so a stack can be bookmarked or handed on.
+function syncUrl() {
+  const params = new URLSearchParams(location.search);
+  params.delete('open');
+  for (const p of panes()) params.append('open', p.dataset.iri);
+  if (stacked) params.set('panes', 'stacked');
+  else params.delete('panes');
+  const q = params.toString();
+  history.replaceState(null, '', q ? `?${q}` : location.pathname);
+}
+
+const reopen = new URLSearchParams(location.search).getAll('open');
+setStacked(stacked);
+refresh().then(() => {
+  let from = null;
+  for (const iri of stacked ? reopen : reopen.slice(-1)) {
+    openEntity(iri, from);
+    from = panes().at(-1);
+  }
+});
+</script>
+</body>
+</html>
