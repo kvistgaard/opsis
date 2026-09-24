@@ -8,7 +8,7 @@ Every click is a SPARQL query.
 
 The name comes from ὄψις, "view, aspect". 
 
-The current version of Opsis is meant for personal knowledge graphs.
+The current version of Opsis is meant for personal knowledge graphs (It is too slow for public graphs the size of DBpedia or Wikidata).
 
 ```
 index.html?endpoint=http://localhost:7878/query
@@ -19,9 +19,7 @@ index.html?endpoint=http://localhost:7878/query
   <img alt="Opsis on a personal knowledge graph: class facets on the left, blog posts in the second pane, two entity panes stacked on the right" src="assets/screenshot-pkg-light.png">
 </picture>
 
-It is too slow for public graphs the size of DBpedia or Wikidata.
-
-Here is a [live demo](https://kvistgaard.github.io/opsis/?endpoint=https://data.nobelprize.org/store/sparql) on the Nobel Prize linked data.
+Here is also a [live demo](https://kvistgaard.github.io/opsis/?endpoint=https://data.nobelprize.org/store/sparql) on the Nobel Prize linked data.
 ## One file, all SPARQL
 
 Opsis is under 1,000 lines of HTML, CSS, and JavaScript. It has no build step, no libraries, and no server. The page sends SPARQL queries directly to the endpoint in response to user actions.
