@@ -8,11 +8,11 @@ Every click is a SPARQL query.
 
 The name comes from ὄψις, "view, aspect". 
 
+The current version of Opsis is meant for personal knowledge graphs.
+
 ```
 index.html?endpoint=http://localhost:7878/query
 ```
-
-The current version of Opsis is meant for personal knowledge graphs.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshot-pkg-dark.png">
