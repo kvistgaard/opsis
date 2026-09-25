@@ -41,12 +41,10 @@ Opsis reads its settings from the graph it browses. Edit [`settings.example.ttl`
 
 Three features use settings:
 
-- opening local files in desktop applications, for example Markdown notes in
+- Opening local files in desktop applications, for example Markdown notes in
   Obsidian
-- choosing between several SPARQL endpoints from the header
-- pinning classes for every visitor. The classes you list in the settings
-  appear at the top of the Class list for everyone who opens the graph. A
-  class you pin with a click (the pin icon appears when you hover on a class) stays pinned only in your own browser.
+- Choosing between several SPARQL endpoints from the header
+- Pinning classes. The classes you list in the settings appear at the top of the Class list for everyone who opens the graph. A class you pin with a click (the pin icon appears when you hover on a class) stays pinned only in your own browser but if so you wish, you can copy it as Turtle with one click and add to the settings. 
 
 
 ## Troubleshooting
