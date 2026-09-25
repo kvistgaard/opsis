@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Pinned classes. The pin beside a class puts it at the top of the Class list,
+  where it keeps its count under any filter. Drag pinned classes, or press
+  Alt+↑ and Alt+↓, to reorder them. Your pins stay in the browser, one list
+  per endpoint. A store can set pins for every viewer with
+  `cfg:pinnedClasses` (nodica vocabulary 0.9.0), and **copy as Turtle** turns
+  your pins into that form. **reset** returns to the store's pins.
+
 ## [0.1.0] – 2026-09-23
 
 First public release. Opsis was developed inside a personal knowledge graph

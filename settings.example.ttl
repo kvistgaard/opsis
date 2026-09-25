@@ -31,7 +31,15 @@
         cfg:fileExtension "pdf" ;
         cfg:template "zotero://open-pdf/library/items/{LOCAL}" ;
         rdfs:comment "Illustrative. Any application with a registered protocol handler works the same way: name the scheme it answers to and build its address out of the placeholders."@en ;
-    ] .
+    ] ;
+
+    # The classes listed first in the Class facet, in this order. A viewer who
+    # pins, unpins or reorders keeps their own list in the browser, and "copy as
+    # Turtle" gives it back in this form.
+    cfg:pinnedClasses (
+        <http://purl.org/ontology/bibo/Book>
+        <https://schema.org/BlogPosting>
+    ) .
 
 # Placeholders, filled from the matched IRI:
 #

@@ -22,7 +22,7 @@ index.html?endpoint=http://localhost:7878/query
 Here is also a [live demo](https://kvistgaard.github.io/opsis/?endpoint=https://data.nobelprize.org/store/sparql) on the Nobel Prize linked data.
 ## One file, all SPARQL
 
-Opsis is under 1,000 lines of HTML, CSS, and JavaScript. It has no build step, no libraries, and no server. The page sends SPARQL queries directly to the endpoint in response to user actions.
+Opsis is under 1.5K lines of HTML, CSS, and JavaScript. It has no build step, no libraries, and no server. The page sends SPARQL queries directly to the endpoint in response to user actions.
 
 Selecting a class adds `?s a/rdfs:subClassOf* <class>` to the query. Selecting a graph adds `GRAPH <graph> { ?s ?p ?o }`. 
 
@@ -39,11 +39,14 @@ someone.
 
 Opsis reads its settings from the graph it browses. Edit [`settings.example.ttl`](settings.example.ttl) there like any other RDF data.
 
-Two features need settings:
+Three features use settings:
 
 - opening local files in desktop applications, for example Markdown notes in
   Obsidian
 - choosing between several SPARQL endpoints from the header
+- pinning classes for every visitor. The classes you list in the settings
+  appear at the top of the Class list for everyone who opens the graph. A
+  class you pin with a click (the pin icon appears when you hover on a class) stays pinned only in your own browser.
 
 
 ## Troubleshooting

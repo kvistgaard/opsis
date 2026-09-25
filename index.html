@@ -97,6 +97,22 @@
   .facet.on .n { color:var(--on-accent); opacity:.8; }
   .facet .ns { color:var(--muted); font-size:11px; margin-left:5px; }
   .facet.on .ns { color:var(--on-accent); opacity:.75; }
+  /* Pinned classes head the Class list, in the viewer's order, above a rule
+     that carries the way back to the store's pins. The pin shows on hover, and
+     stays faint on the pinned. */
+  .facet .r { display:flex; gap:6px; align-items:baseline; }
+  button.pin { border:0; background:none; padding:0; cursor:pointer; color:inherit;
+               opacity:0; line-height:1; align-self:center; }
+  .facet:hover button.pin, button.pin:focus-visible { opacity:.7; }
+  .facet.pinned button.pin { opacity:.45; }
+  button.pin:hover { opacity:1 !important; }
+  .facet.pinned { cursor:grab; }
+  .facet.zero { opacity:.55; }
+  .facet.dragging { opacity:.4; }
+  .facet.drop-before { box-shadow:inset 0 2px 0 var(--accent); }
+  .facet.drop-after { box-shadow:inset 0 -2px 0 var(--accent); }
+  .pinbar { border-top:1px solid var(--line); margin:4px 0; padding-top:2px;
+            display:flex; justify-content:flex-end; gap:10px; min-height:0; }
   .row { padding:5px 6px; border-radius:4px; cursor:pointer; }
   .row:hover { background:var(--chip); }
   .row .t, .t { color:var(--muted); font-size:12px; }
@@ -214,6 +230,7 @@
 const REMEMBERED = 'opsis-endpoint';
 const remember = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 const recall = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const forget = k => { try { localStorage.removeItem(k); } catch (e) {} };
 const ENDPOINT = new URLSearchParams(location.search).get('endpoint')
   || recall(REMEMBERED)
   || 'http://localhost:7878/query';
@@ -348,7 +365,7 @@ function loadSettings() {
   if (settingsLoaded) return Promise.resolve();
   if (!settingsInFlight) {
     settingsInFlight = Promise.all([loadPrefixes(), loadOpenRules(),
-                                    loadEndpoints(), loadCatalogue()])
+                                    loadEndpoints(), loadCatalogue(), loadPins()])
       .then(ok => { settingsLoaded = ok.every(Boolean); })
       .finally(() => { settingsInFlight = null; });
   }
@@ -374,6 +391,60 @@ async function loadCatalogue() {
     btn.hidden = false;
     return true;
   } catch (e) { btn.hidden = true; return false; }
+}
+
+// Pinned classes head the Class list. The store may name a default for every
+// viewer, as the RDF list cfg:pinnedClasses on its cfg:Configuration. A
+// viewer's own pins live in this browser, one list per endpoint, and replace
+// the store's list rather than adding to it, so unpinning a default needs no
+// record of its own. The page never writes to the store: "copy as Turtle"
+// hands the list over for the settings graph, and once the store serves the
+// same list the browser's copy is dropped, so later edits to the store reach
+// this viewer again.
+const PINS = `opsis-pins ${ENDPOINT}`;
+// Pins are written into queries between angle brackets, and the browser's
+// copy is not the store's data, so anything that could close the IRI is refused.
+const iriSafe = s => typeof s === 'string' && /^[a-z][a-z0-9+.-]*:[^\s<>"{}|^`\\]*$/i.test(s);
+let storePins = [], ownPins = null, storeConfig = null;
+try {
+  const v = JSON.parse(recall(PINS));
+  if (Array.isArray(v)) ownPins = v.filter(iriSafe);
+} catch (e) {}
+const pinned = () => ownPins || storePins;
+const samePins = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+function setPins(list) { ownPins = list; remember(PINS, JSON.stringify(list)); }
+function resetPins() { ownPins = null; forget(PINS); }
+
+// An RDF list's order is the number of cells before each member. Two lists
+// in the store would interleave, so only the first is read.
+async function loadPins() {
+  try {
+    const rows = await sparql(`PREFIX cfg: <https://kvistgaard.github.io/config#>
+      PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+      SELECT ?config ?list ?c (COUNT(?mid) AS ?pos) WHERE {
+        ?config a cfg:Configuration ; cfg:pinnedClasses ?list .
+        ?list rdf:rest* ?mid . ?mid rdf:rest* ?cell . ?cell rdf:first ?c .
+      } GROUP BY ?config ?list ?cell ?c ORDER BY ?config ?list ?pos`);
+    const first = rows.length ? rows[0].list.value : null;
+    storePins = [...new Set(rows.filter(b => b.list.value === first).map(b => b.c.value))]
+      .filter(iriSafe);
+    const cfg = rows.length ? rows[0].config
+      : (await sparql(`SELECT ?config WHERE {
+          ?config a <https://kvistgaard.github.io/config#Configuration> } LIMIT 1`))[0]?.config;
+    storeConfig = cfg && cfg.type === 'uri' ? cfg.value : null;
+    if (ownPins && samePins(ownPins, storePins)) resetPins();
+    return true;
+  } catch (e) { return false; }
+}
+// The browser's pins as Turtle, ready for the settings graph. A store with a
+// named configuration gets the triple on that node; one without gets a new
+// configuration of its own.
+function pinsTurtle() {
+  const items = pinned().map(c => `    <${c}>`).join('\n');
+  const subject = storeConfig ? `<${storeConfig}>` : '[] a cfg:Configuration ;\n   ';
+  return `@prefix cfg: <https://kvistgaard.github.io/config#> .\n\n` +
+    `# Opsis pinned classes. Replaces any cfg:pinnedClasses the configuration has.\n` +
+    `${subject} cfg:pinnedClasses (\n${items}\n) .\n`;
 }
 
 async function loadEndpoints() {
@@ -495,8 +566,15 @@ const offersChoice = rows => rows.length >= 2 &&
   rows.filter(b => Number(b.n.value) >= 2).length > rows.length / 2;
 const shown = key => offered[key] !== false || !!state[key];
 
+// The last facet answers, kept so pinning and reordering redraw at once
+// without asking the endpoint again.
+let facetRows = {classes: [], graphs: [], pins: []};
+
 async function loadFacets(current) {
-  const [classes, graphs] = await Promise.all([
+  // A pinned class keeps its place whatever its count, so pins are counted on
+  // their own: outside the top forty, and at 0 under a filter that empties them.
+  const pins = pinned();
+  const [classes, graphs, pinRows] = await Promise.all([
     !shown('cls') ? [] : sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
       { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
           ${filters('cls')}
@@ -514,33 +592,82 @@ async function loadFacets(current) {
         } GROUP BY ?g }
       OPTIONAL { ?g <http://purl.org/dc/terms/title> ?t }
     } GROUP BY ?g ?n ORDER BY DESC(?n)`),
+    !pins.length ? [] : sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
+      VALUES ?c { ${pins.map(c => `<${c}>`).join(' ')} }
+      OPTIONAL { { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
+          VALUES ?c { ${pins.map(c => `<${c}>`).join(' ')} }
+          ${filters('cls')}
+          ?s a ?leaf .
+          ?leaf rdfs:subClassOf* ?c .
+          FILTER(isIRI(?s))
+        } GROUP BY ?c } }
+      OPTIONAL { ?c rdfs:label ?l }
+    } GROUP BY ?c ?n`),
   ]);
   if (!current()) return;
   if (!state.cls && !state.graph && !state.text) {
     if (offered.cls === null) offered.cls = offersChoice(classes);
     if (offered.graph === null) offered.graph = offersChoice(graphs);
   }
+  facetRows = {classes, graphs, pins: pinRows};
+  renderFacets();
+}
+
+function renderFacets() {
+  const {classes, graphs} = facetRows;
+  const pins = pinned();
+  // A pin's count comes from its own query, or, for a class pinned since,
+  // from the list it was pinned from.
+  const known = new Map([...classes, ...facetRows.pins].map(b => [b.c.value, b]));
+  const pinRows = pins.map(c => known.get(c) || {c: {value: c}});
+  const rest = classes.filter(b => !pins.includes(b.c.value));
   // Every class carries its namespace hint, so the vocabulary a class belongs
   // to reads off the list rather than out of the hover. Graph names share one
   // namespace, so there the hint appears only where two share a title.
-  const render = (rows, iriOf, nameOf, key, always) => {
+  const render = (rows, iriOf, nameOf, key, always, isPinned = false) => {
     const seen = {};
     for (const b of rows) { const nm = nameOf(b); seen[nm] = (seen[nm] || 0) + 1; }
     return rows.map(b => {
-      const v = iriOf(b), nm = nameOf(b);
+      const v = iriOf(b), nm = nameOf(b), n = b.n ? b.n.value : '0';
       const hint = (always || seen[nm] > 1) ? `<span class="ns">· ${esc(nsHint(v))}</span>` : '';
-      return `<div class="facet ${state[key] === v ? 'on' : ''}" data-key="${key}"
-                   data-v="${esc(v)}" title="${esc(v)}">
-                <span>${esc(nm)}${hint}</span><span class="n">${b.n.value}</span></div>`;
+      const pin = key !== 'cls' ? '' :
+        `<button class="pin" data-pin="${esc(v)}" title="${isPinned ? 'Unpin' : 'Pin to the top'}"
+                 aria-label="${isPinned ? 'Unpin' : 'Pin'} ${esc(nm)}">${PIN_ICON}</button>`;
+      const cls = ['facet', state[key] === v ? 'on' : '', isPinned ? 'pinned' : '', n === '0' ? 'zero' : ''];
+      return `<div class="${cls.join(' ').trim()}" data-key="${key}" data-v="${esc(v)}" title="${esc(v)}"${
+                   isPinned ? ' draggable="true" tabindex="0"' : ''}>
+                <span>${esc(nm)}${hint}</span><span class="r">${pin}<span class="n">${n}</span></span></div>`;
     }).join('');
   };
-  const section = (key, title, body) => !shown(key) ? '' :
+  const section = (key, title, body, show = shown(key)) => !show ? '' :
     `<h2>${title} ${state[key] ? `<button class="clear" data-clear="${key}">clear</button>` : ''}</h2>` + body;
+  const clsName = b => b.label ? b.label.value : localName(b.c.value);
+  const own = ownPins && !samePins(ownPins, storePins);
+  const pinbar = !pins.length && !own ? '' : `<div class="pinbar">${own ?
+    `<button class="clear" id="pincopy" title="Copy these pins as Turtle, for the store's settings">copy as Turtle</button>
+     <button class="clear" id="pinreset" title="${storePins.length ? "Back to the store's pins" : 'Unpin all'}">reset</button>` : ''}</div>`;
   document.getElementById('facets').innerHTML =
     section('cls', 'Class',
-      render(classes, b => b.c.value, b => b.label ? b.label.value : localName(b.c.value), 'cls', true)) +
+      render(pinRows, b => b.c.value, clsName, 'cls', true, true) + pinbar +
+      (shown('cls') ? render(rest, b => b.c.value, clsName, 'cls', true) : ''),
+      shown('cls') || pins.length > 0) +
     section('graph', 'Graph',
       render(graphs, b => b.g.value, b => b.title ? b.title.value : localName(b.g.value), 'graph'));
+}
+
+function togglePin(iri) {
+  const list = pinned();
+  setPins(list.includes(iri) ? list.filter(c => c !== iri) : [...list, iri]);
+  renderFacets();
+}
+// Put a pinned class before or after another; the list is saved as it stands.
+function movePin(iri, target, after) {
+  const list = pinned().filter(c => c !== iri);
+  const at = list.indexOf(target);
+  if (at < 0) return;
+  list.splice(at + (after ? 1 : 0), 0, iri);
+  setPins(list);
+  renderFacets();
 }
 
 // An IRI worth following in a browser rather than in this pane. http(s)
@@ -648,6 +775,8 @@ const followLink = iri => {
 const COPY_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" fill="none" ' +
   'stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="5.5" width="8.5" height="8.5" rx="1.5"/>' +
   '<path d="M10.5 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5"/></svg>';
+const PIN_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" fill="none" ' +
+  'stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 2h4M7 2v4.5L4.5 9.5h7L9 6.5V2M8 9.5V14"/></svg>';
 const copyButton = iri =>
   `<button class="copy" data-copy="${esc(iri)}" title="Copy ${esc(iri)}" aria-label="Copy IRI">${COPY_ICON}</button>`;
 // The clipboard API wants a secure context; where it refuses, the older
@@ -937,6 +1066,17 @@ document.addEventListener('click', e => {
     refresh();
     return;
   }
+  const pin = e.target.closest('button.pin');
+  if (pin) { togglePin(pin.dataset.pin); return; }
+  if (e.target.id === 'pinreset') { resetPins(); renderFacets(); return; }
+  if (e.target.id === 'pincopy') {
+    const b = e.target;
+    copyText(pinsTurtle()).then(() => {
+      b.textContent = 'copied';
+      setTimeout(() => { b.textContent = 'copy as Turtle'; }, 1200);
+    });
+    return;
+  }
   const f = e.target.closest('.facet');
   if (f) { state[f.dataset.key] = state[f.dataset.key] === f.dataset.v ? null : f.dataset.v;
            refresh(); return; }
@@ -955,6 +1095,48 @@ document.getElementById('ep').addEventListener('change', e => {
   params.set('endpoint', url);
   location.search = params.toString();
 });
+// Pinned classes reorder by dragging, or with Alt+↑ and Alt+↓ on a focused one.
+const facetsEl = document.getElementById('facets');
+let dragged = null;
+const dropMarks = () => facetsEl.querySelectorAll('.drop-before, .drop-after')
+  .forEach(x => x.classList.remove('drop-before', 'drop-after'));
+facetsEl.addEventListener('dragstart', e => {
+  const f = e.target.closest('.facet.pinned');
+  if (!f) return;
+  dragged = f.dataset.v;
+  f.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', dragged);   // Firefox starts no drag without data
+});
+facetsEl.addEventListener('dragover', e => {
+  const f = e.target.closest('.facet.pinned');
+  if (!dragged || !f) return;
+  e.preventDefault();
+  const r = f.getBoundingClientRect();
+  dropMarks();
+  if (f.dataset.v !== dragged)
+    f.classList.add(e.clientY > r.top + r.height / 2 ? 'drop-after' : 'drop-before');
+});
+facetsEl.addEventListener('drop', e => {
+  const f = e.target.closest('.facet.pinned');
+  if (!dragged || !f) return;
+  e.preventDefault();
+  if (f.dataset.v !== dragged) movePin(dragged, f.dataset.v, f.classList.contains('drop-after'));
+});
+facetsEl.addEventListener('dragend', () => { dragged = null; renderFacets(); });
+facetsEl.addEventListener('keydown', e => {
+  const f = e.target.closest('.facet.pinned');
+  if (!f || e.target !== f) return;
+  if (e.key === 'Enter') { f.click(); return; }
+  if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  e.preventDefault();
+  const list = pinned(), v = f.dataset.v, i = list.indexOf(v);
+  const j = i + (e.key === 'ArrowUp' ? -1 : 1);
+  if (j < 0 || j >= list.length) return;
+  movePin(v, list[j], e.key === 'ArrowDown');
+  [...facetsEl.querySelectorAll('.facet.pinned')].find(x => x.dataset.v === v)?.focus();
+});
+
 let timer;
 document.getElementById('q').addEventListener('input', e => {
   clearTimeout(timer);
