@@ -111,6 +111,7 @@
   .facet.dragging { opacity:.4; }
   .facet.drop-before { box-shadow:inset 0 2px 0 var(--accent); }
   .facet.drop-after { box-shadow:inset 0 -2px 0 var(--accent); }
+  .allcls { padding:4px 6px; }
   .pinbar { border-top:1px solid var(--line); margin:4px 0; padding-top:2px;
             display:flex; justify-content:flex-end; gap:10px; min-height:0; }
   .row { padding:5px 6px; border-radius:4px; cursor:pointer; }
@@ -568,7 +569,11 @@ const shown = key => offered[key] !== false || !!state[key];
 
 // The last facet answers, kept so pinning and reordering redraw at once
 // without asking the endpoint again.
-let facetRows = {classes: [], graphs: [], pins: []};
+let facetRows = {classes: [], graphs: [], pins: [], more: false};
+// The Class list shows the forty largest classes until "show all" is clicked.
+// One row past the forty says whether there are more, without a count query.
+const CLASS_CAP = 40;
+let allClasses = false;
 
 async function loadFacets(current) {
   // A pinned class keeps its place whatever its count, so pins are counted on
@@ -581,7 +586,7 @@ async function loadFacets(current) {
           ?s a ?leaf .
           ?leaf rdfs:subClassOf* ?c .
           FILTER(isIRI(?c) && isIRI(?s))
-        } GROUP BY ?c ORDER BY DESC(?n) LIMIT 40 }
+        } GROUP BY ?c ORDER BY DESC(?n) ${allClasses ? '' : `LIMIT ${CLASS_CAP + 1}`} }
       OPTIONAL { ?c rdfs:label ?l }
     } GROUP BY ?c ?n ORDER BY DESC(?n)`),
     !shown('graph') ? [] : sparql(`${PREFIX}SELECT ?g ?n (SAMPLE(?t) AS ?title) WHERE {
@@ -609,7 +614,8 @@ async function loadFacets(current) {
     if (offered.cls === null) offered.cls = offersChoice(classes);
     if (offered.graph === null) offered.graph = offersChoice(graphs);
   }
-  facetRows = {classes, graphs, pins: pinRows};
+  const more = !allClasses && classes.length > CLASS_CAP;
+  facetRows = {classes: more ? classes.slice(0, CLASS_CAP) : classes, graphs, pins: pinRows, more};
   renderFacets();
 }
 
@@ -649,7 +655,8 @@ function renderFacets() {
   document.getElementById('facets').innerHTML =
     section('cls', 'Class',
       render(pinRows, b => b.c.value, clsName, 'cls', true, true) + pinbar +
-      (shown('cls') ? render(rest, b => b.c.value, clsName, 'cls', true) : ''),
+      (shown('cls') ? render(rest, b => b.c.value, clsName, 'cls', true) +
+        (facetRows.more ? '<div class="allcls"><button class="clear" id="allcls" title="List every class, not only the forty largest">show all</button></div>' : '') : ''),
       shown('cls') || pins.length > 0) +
     section('graph', 'Graph',
       render(graphs, b => b.g.value, b => b.title ? b.title.value : localName(b.g.value), 'graph'));
@@ -1069,6 +1076,7 @@ document.addEventListener('click', e => {
   const pin = e.target.closest('button.pin');
   if (pin) { togglePin(pin.dataset.pin); return; }
   if (e.target.id === 'pinreset') { resetPins(); renderFacets(); return; }
+  if (e.target.id === 'allcls') { allClasses = true; loadFacets(take('facets')).catch(fail); return; }
   if (e.target.id === 'pincopy') {
     const b = e.target;
     copyText(pinsTurtle()).then(() => {

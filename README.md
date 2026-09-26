@@ -60,7 +60,8 @@ Three features use settings:
 ## Roadmap
 
 - Pane search
-- Larger graphs, with counts precomputed or estimated.
+- Class filtering
+- Larger graphs
 - Back and forward through stacked panes with the browser's history.
 - Keyboard navigation between panes.
 
