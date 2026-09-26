@@ -7,19 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] – 2026-09-25
+
 ### Added
 
-- Pinned classes. The pin beside a class puts it at the top of the Class list,
-  where it keeps its count under any filter. Drag pinned classes, or press
-  Alt+↑ and Alt+↓, to reorder them. Your pins stay in the browser, one list
-  per endpoint. A store can set pins for every viewer with
-  `cfg:pinnedClasses` (nodica vocabulary 0.9.0), and **copy as Turtle** turns
-  your pins into that form. **reset** returns to the store's pins.
+- Pinned classes. Hover over a class and click the pin to put it at the top
+  of the Class list, where it keeps its count under any filter. Drag pinned
+  classes, or press Alt+↑ and Alt+↓, to change their order. Your pins are
+  saved in your browser.
+- The classes you list as `cfg:pinnedClasses` in the settings appear pinned
+  for everyone who opens the graph. **Copy as Turtle** gives you your own pins
+  in that form, and **reset** goes back to the list in the settings.
 
 ## [0.1.0] – 2026-09-23
 
-First public release. Opsis was developed inside a personal knowledge graph
-project and now stands on its own.
+First public release. 
 
 ### Added
 
@@ -47,5 +49,6 @@ project and now stands on its own.
 - Light and dark themes that follow the system.
 - Page metadata: description, licence, Open Graph and schema.org JSON-LD.
 
-[Unreleased]: https://github.com/kvistgaard/opsis/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kvistgaard/opsis/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kvistgaard/opsis/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kvistgaard/opsis/releases/tag/v0.1.0
