@@ -59,7 +59,7 @@ Three features use settings:
 
 ## Roadmap
 
-- Class filtering
+- Pane search
 - Larger graphs, with counts precomputed or estimated.
 - Back and forward through stacked panes with the browser's history.
 - Keyboard navigation between panes.
