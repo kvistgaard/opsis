@@ -372,6 +372,16 @@ function loadSettings() {
   }
   return settingsInFlight;
 }
+// Whether the store keeps any triples in named graphs. The entity pane reads
+// each fact with the graph it sits in, and on a store with none, such as
+// QLever's Wikidata, every pane came back empty. The Graph section's first
+// answer tells, since it lists every named graph and an empty list means none,
+// so the page asks the store nothing extra. Until that answer comes, the page
+// assumes named graphs, as it always has. If it never comes, as when QLever's
+// Wikidata took a minute over it (2026-09-29), an entity pane that finds
+// nothing asks the store once, and asks again outside any graph if it has none.
+let namedGraphs = true;
+let graphsKnown = false;
 // The endpoints on offer are the ones the catalogue already describes: DCAT's
 // own dcat:DataService and dcat:endpointURL. No term of our own, because a query service is exactly what DCAT is for - and because a
 // second endpoint then advertises itself to this page merely by describing
@@ -515,15 +525,78 @@ const esc = s => String(s).replace(/[&<>"]/g, c =>
 // and whatever it had so far (Virtuoso does). The rows are kept and the status
 // line says the counts may be short, rather than passing them off as complete.
 let partial = false;
-async function sparql(query) {
-  const r = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: {'Accept': 'application/sparql-results+json'},
-    body: new URLSearchParams({query}),
-  });
-  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-  if (r.status === 206) partial = true;
-  return (await r.json()).results.bindings;
+// Whether the endpoint is QLever, which adds a `meta` block to its JSON
+// answers. It changes one test; see isIri below.
+let qlever = false;
+// Some endpoints refuse a client's queries beyond a few at once: QLever's
+// public Wikidata endpoint answers a fourth with 429 and an HTML page from its
+// web server (2026-09-27). The page sends as many queries as it likes until
+// the first refusal. From then on it keeps no more in flight than the endpoint
+// was carrying when it refused, and the refused query waits its turn and goes
+// again. A store that never refuses never sees the queue. QLever also answers
+// 429 to a query that ran out of time, but in JSON and after its 30 s; that
+// one is an answer and is not sent again.
+let inFlight = 0, maxInFlight = Infinity;
+const queue = [];
+async function takeSlot() {
+  while (inFlight >= maxInFlight) await new Promise(go => queue.push(go));
+  inFlight++;
+}
+function freeSlot() { inFlight--; queue.shift()?.(); }
+async function sparql(query, signal) {
+  for (let attempt = 1; ; attempt++) {
+    await takeSlot();
+    try {
+      const r = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {'Accept': 'application/sparql-results+json'},
+        body: new URLSearchParams({query}),
+        signal,
+      });
+      const refused = r.status === 429 && !/json/.test(r.headers.get('content-type') || '');
+      if (refused && attempt < 5) {
+        largeStore = true;
+        maxInFlight = Math.max(1, Math.min(maxInFlight, inFlight - 1));
+        await r.text();
+        await new Promise(wait => setTimeout(wait, 200 * attempt));
+        continue;
+      }
+      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+      if (r.status === 206) partial = true;
+      const answer = await r.json();
+      if (answer.meta) qlever = true;
+      return answer.results.bindings;
+    } finally { freeSlot(); }
+  }
+}
+
+// Large-store mode. On every store the page asks what it has always asked,
+// until the store shows it is large: a query that misses TIME_LIMIT, or a
+// refusal (above). A small store never gets there; the slowest answer
+// measured on the PKG and the Nobel Prize data took 0.84 s (2026-09-27). From
+// then on, for the rest of the session, the page asks the cheaper forms of its
+// queries.
+const TIME_LIMIT = 1000;
+let largeStore = false;
+// A count that misses TIME_LIMIT is not waited for: the list shows without it
+// and the count fills in when it comes. A small store answers well inside the
+// limit, so it sees the page it always saw.
+const LATE = Symbol('late');
+const within = (promise, ms) =>
+  Promise.race([promise, new Promise(done => setTimeout(() => done(LATE), Math.max(0, ms)))]);
+// Counts refreshes, so that a count arriving late knows whether its view is
+// still the one on screen.
+let view = 0;
+// Whether a facet list went unanswered in this refresh.
+let unanswered = false;
+// A query with a time limit: its rows, or null once the limit has passed and
+// the request has been dropped.
+async function sparqlWithin(query, ms) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try { return await sparql(query, ctl.signal); }
+  catch (e) { if (ctl.signal.aborted) return null; throw e; }
+  finally { clearTimeout(timer); }
 }
 
 // Filters are built once and shared by the facet counts and the result list, so
@@ -546,14 +619,29 @@ const PREFIX = 'PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n';
 // skips them when it indexes; the SPARQL paths have to be told. Without this
 // the CONTAINS scan listed two blank subjects for "cohesion" and the date
 // lookup then built <b0>, which the endpoint rejects.
-const IRI_ONLY = 'FILTER(isIRI(?s))';
-const whereWith = extra => `${filters() || '?s a ?anyClass .'}\n  ${IRI_ONLY}${extra || ''}`;
+// QLever raises an error in isIRI, isURI and isBlank for most of Wikidata's
+// item IRIs, which it stores in a compact form, and a filter drops any row
+// whose test fails with an error. On its Wikidata this page counted 5,313,729
+// humans of 13,711,077 (2026-09-28). Once an answer shows the endpoint is
+// QLever, an IRI is also recognised by its text; every other store gets the
+// test it always got.
+const isIri = v => qlever ? `(isIRI(${v}) || STRSTARTS(STR(${v}), "http"))` : `isIRI(${v})`;
+const whereWith = extra => `${filters() || '?s a ?anyClass .'}\n  FILTER(${isIri('?s')})${extra || ''}`;
 
 // Labels and titles are looked up after counting, in the outer query. Joined
 // inside the aggregate, the title lookup ran once per quad: the graph facet
 // took ten times as long that way, for the same rows. Both count IRI subjects
 // only, as the list does; counting blank nodes made a graph's facet promise
 // several times the entities its list then showed.
+// The entity count and the class facet take the distinct subjects first and
+// count the rows, which is COUNT(DISTINCT ?s) by definition. On QLever's
+// Wikidata (2026-09-27, median of three) the count of humans fell from 5.6 s
+// to 0.36 s, and the class facet under "lighthouse" from 1.2 s to 0.7 s; on
+// the PKG and the Nobel Prize data both shapes timed the same, within noise.
+// The graph facet and the pins keep COUNT(DISTINCT): no graphs to measure on
+// QLever, and the pins' query ran slower there in the new shape (22 ms against
+// 389 ms of server time).
+const countOf = where => `SELECT (COUNT(*) AS ?n) WHERE { SELECT DISTINCT ?s WHERE { ${where} } }`;
 // A facet earns its section by offering a choice between groups: two values
 // or more, most of them holding more than one entity. The Nobel Prize store
 // fails it for graphs: beside its data graph it keeps each record's metadata
@@ -579,43 +667,67 @@ async function loadFacets(current) {
   // A pinned class keeps its place whatever its count, so pins are counted on
   // their own: outside the top forty, and at 0 under a filter that empties them.
   const pins = pinned();
+  // The first unfiltered answer about graphs also says whether the store has
+  // any. It is read as soon as it comes, so a class list that times out, as
+  // Wikidata's does, cannot take it down with it.
+  const unfiltered = !state.cls && !state.graph && !state.text;
+  const learnGraphs = rows => {
+    if (unfiltered && offered.graph === null) {
+      graphsKnown = true;
+      if (!rows.length) namedGraphs = false;
+    }
+    return rows;
+  };
+  // Past the time limit the lists read "counting…", since the counts on screen
+  // belong to the previous view; a list the store does not answer says so.
+  const counting = setTimeout(() => {
+    if (!current()) return;
+    largeStore = true;
+    document.getElementById('facets').innerHTML = '<p class="t">counting…</p>';
+  }, TIME_LIMIT);
+  const settle = q => Promise.resolve(q).then(rows => rows, () => null);
   const [classes, graphs, pinRows] = await Promise.all([
-    !shown('cls') ? [] : sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
-      { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
+    !shown('cls') ? [] : settle(sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
+      { SELECT ?c (COUNT(*) AS ?n) WHERE { SELECT DISTINCT ?c ?s WHERE {
           ${filters('cls')}
           ?s a ?leaf .
           ?leaf rdfs:subClassOf* ?c .
-          FILTER(isIRI(?c) && isIRI(?s))
-        } GROUP BY ?c ORDER BY DESC(?n) ${allClasses ? '' : `LIMIT ${CLASS_CAP + 1}`} }
+          FILTER(${isIri('?c')} && ${isIri('?s')})
+        } } GROUP BY ?c ORDER BY DESC(?n) ${allClasses ? '' : `LIMIT ${CLASS_CAP + 1}`} }
       OPTIONAL { ?c rdfs:label ?l }
-    } GROUP BY ?c ?n ORDER BY DESC(?n)`),
-    !shown('graph') ? [] : sparql(`${PREFIX}SELECT ?g ?n (SAMPLE(?t) AS ?title) WHERE {
+    } GROUP BY ?c ?n ORDER BY DESC(?n)`)),
+    !shown('graph') ? [] : settle(sparql(`${PREFIX}SELECT ?g ?n (SAMPLE(?t) AS ?title) WHERE {
       { SELECT ?g (COUNT(DISTINCT ?s) AS ?n) WHERE {
           ${filters('graph')}
           GRAPH ?g { ?s ?gp ?go }
-          FILTER(isIRI(?s))
+          FILTER(${isIri('?s')})
         } GROUP BY ?g }
       OPTIONAL { ?g <http://purl.org/dc/terms/title> ?t }
-    } GROUP BY ?g ?n ORDER BY DESC(?n)`),
-    !pins.length ? [] : sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
+    } GROUP BY ?g ?n ORDER BY DESC(?n)`).then(learnGraphs)),
+    !pins.length ? [] : settle(sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
       VALUES ?c { ${pins.map(c => `<${c}>`).join(' ')} }
       OPTIONAL { { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
           VALUES ?c { ${pins.map(c => `<${c}>`).join(' ')} }
           ${filters('cls')}
           ?s a ?leaf .
           ?leaf rdfs:subClassOf* ?c .
-          FILTER(isIRI(?s))
+          FILTER(${isIri('?s')})
         } GROUP BY ?c } }
       OPTIONAL { ?c rdfs:label ?l }
-    } GROUP BY ?c ?n`),
+    } GROUP BY ?c ?n`)),
   ]);
+  clearTimeout(counting);
   if (!current()) return;
+  if (classes === null || graphs === null || pinRows === null) unanswered = true;
   if (!state.cls && !state.graph && !state.text) {
-    if (offered.cls === null) offered.cls = offersChoice(classes);
-    if (offered.graph === null) offered.graph = offersChoice(graphs);
+    if (offered.cls === null && classes) offered.cls = offersChoice(classes);
+    if (offered.graph === null && graphs) offered.graph = offersChoice(graphs);
   }
-  const more = !allClasses && classes.length > CLASS_CAP;
-  facetRows = {classes: more ? classes.slice(0, CLASS_CAP) : classes, graphs, pins: pinRows, more};
+  const listedClasses = classes || [];
+  const more = !allClasses && listedClasses.length > CLASS_CAP;
+  facetRows = {classes: more ? listedClasses.slice(0, CLASS_CAP) : listedClasses,
+               graphs: graphs || [], pins: pinRows || [], more,
+               failed: {cls: classes === null, graph: graphs === null}};
   renderFacets();
 }
 
@@ -645,8 +757,10 @@ function renderFacets() {
                 <span>${esc(nm)}${hint}</span><span class="r">${pin}<span class="n">${n}</span></span></div>`;
     }).join('');
   };
+  const gap = key => facetRows.failed?.[key]
+    ? '<p class="t">The store did not answer in time.</p>' : '';
   const section = (key, title, body, show = shown(key)) => !show ? '' :
-    `<h2>${title} ${state[key] ? `<button class="clear" data-clear="${key}">clear</button>` : ''}</h2>` + body;
+    `<h2>${title} ${state[key] ? `<button class="clear" data-clear="${key}">clear</button>` : ''}</h2>` + gap(key) + body;
   const clsName = b => b.label ? b.label.value : localName(b.c.value);
   const own = ownPins && !samePins(ownPins, storePins);
   const pinbar = !pins.length && !own ? '' : `<div class="pinbar">${own ?
@@ -821,7 +935,47 @@ async function attachDates(rows) {
   for (const r of rows) r.date = byIri[r.iri];
 }
 
+// The total above the list: the count if it came within the time limit,
+// `…` while a late one is on its way, `?` if the store gave none.
+const awaitCount = (count, started) => !count ? Promise.resolve(null)
+  : within(count.catch(() => '?'), TIME_LIMIT - (performance.now() - started));
+function settleTotal(answer, count) {
+  if (answer === null) return state.total;
+  if (answer === '?') return '?';
+  if (answer !== LATE) return parseInt(answer[0].n.value, 10);
+  largeStore = true;
+  const shownView = view;
+  count.then(rows => {
+    if (view !== shownView) return;
+    state.total = parseInt(rows[0].n.value, 10);
+    drawTotal();
+  }, () => { if (view === shownView) { state.total = '?'; drawTotal(); } });
+  return '…';
+}
+// What the list shows, kept so a late total can redraw the header and the
+// "load more" row without the rows.
+let listed = { shown: 0, note: '', full: false };
+function listHeader() {
+  const { shown, note } = listed, total = state.total;
+  const glyph = state.sort === 'desc' ? '▼' : state.sort === 'asc' ? '▲' : '⇅';
+  return `<h2><span>Entities (${total ? `showing 1–${shown} of ${total}` : '0'}${note})</span>
+    <button class="clear" id="sortd" title="Sort by date: newest first / oldest first / off">date ${glyph}</button></h2>`;
+}
+function moreRow() {
+  const { shown, full } = listed, total = state.total;
+  const left = typeof total === 'number' ? total - shown : full ? PAGE : 0;
+  return left > 0
+    ? `<div class="row" id="more" style="color:var(--accent)">Load ${Math.min(PAGE, left)} more…</div>` : '';
+}
+function drawTotal() {
+  const el = document.getElementById('results');
+  el.querySelector('h2').outerHTML = listHeader();
+  document.getElementById('more')?.remove();
+  if (!el.querySelector('p')) el.insertAdjacentHTML('beforeend', moreRow());
+}
+
 async function loadResults(append, current) {
+  const started = performance.now();
   let rows, total;
   // The sidecar returns at most SEARCH_CAP hits, and every path that uses them
   // - the ranked list, the facet counts, the joins - sees only those.
@@ -839,17 +993,14 @@ async function loadResults(append, current) {
     // The page is chosen by IRI first and labelled after, so an entity with
     // two labels takes one row rather than two.
     const where = whereWith();
-    const [countRows, pageRows] = await Promise.all([
-      append ? Promise.resolve(null)
-             : sparql(`${PREFIX}SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ${where} }`),
-      sparql(`${PREFIX}SELECT ?s (SAMPLE(?l) AS ?label) WHERE {
+    const count = append ? null : sparql(PREFIX + countOf(where));
+    const pageRows = await sparql(`${PREFIX}SELECT ?s (SAMPLE(?l) AS ?label) WHERE {
         { SELECT DISTINCT ?s WHERE { ${where} } ORDER BY ?s LIMIT ${PAGE} OFFSET ${state.offset} }
         OPTIONAL { ?s rdfs:label ?l }
-      } GROUP BY ?s ORDER BY ?s`),
-    ]);
+      } GROUP BY ?s ORDER BY ?s`);
+    const countRows = await awaitCount(count, started);
     if (!current()) return;
-    if (countRows) state.total = parseInt(countRows[0].n.value, 10);
-    total = state.total;
+    total = settleTotal(countRows, count);
     rows = pageRows.map(b => ({ iri: b.s.value, label: b.label ? b.label.value : null }));
     await attachDates(rows);
   } else {
@@ -858,43 +1009,81 @@ async function loadResults(append, current) {
     // store-wide). Undated entities sink to the end under either direction.
     const where = whereWith();
     const order = `DESC(BOUND(?date)) ${state.sort === 'asc' ? 'ASC' : 'DESC'}(?date) ?s`;
-    const [countRows, pageRows] = await Promise.all([
-      append ? Promise.resolve(null)
-             : sparql(`${PREFIX}SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ${where} }`),
-      sparql(`${PREFIX}SELECT ?s ?date (SAMPLE(?l) AS ?label) WHERE {
+    const count = append ? null : sparql(PREFIX + countOf(where));
+    const pageRows = await sparql(`${PREFIX}SELECT ?s ?date (SAMPLE(?l) AS ?label) WHERE {
         { SELECT ?s (MIN(?d) AS ?date) WHERE {
             ${where}
             OPTIONAL { ?s ?dp ?d . ${DATE_FILTER} }
           } GROUP BY ?s
           ORDER BY ${order} LIMIT ${PAGE} OFFSET ${state.offset} }
         OPTIONAL { ?s rdfs:label ?l }
-      } GROUP BY ?s ?date ORDER BY ${order}`),
-    ]);
+      } GROUP BY ?s ?date ORDER BY ${order}`);
+    const countRows = await awaitCount(count, started);
     if (!current()) return;
-    if (countRows) state.total = parseInt(countRows[0].n.value, 10);
-    total = state.total;
+    total = settleTotal(countRows, count);
     rows = pageRows.map(b => ({ iri: b.s.value,
                                 label: b.label ? b.label.value : null,
                                 date: b.date ? b.date.value.slice(0, 10) : null }));
   }
   if (!current()) return;
-  const shown = state.offset + rows.length;
-  const glyph = state.sort === 'desc' ? '▼' : state.sort === 'asc' ? '▲' : '⇅';
-  const header = `<h2><span>Entities (${total ? `showing 1–${shown} of ${total}` : '0'}${note})</span>
-    <button class="clear" id="sortd" title="Sort by date: newest first / oldest first / off">date ${glyph}</button></h2>`;
+  state.total = total;
+  listed = { shown: state.offset + rows.length, note, full: rows.length === PAGE };
   const body = rows.map(r => rowHtml(r.iri, r.label, r.date)).join('');
-  const more = shown < total
-    ? `<div class="row" id="more" style="color:var(--accent)">Load ${Math.min(PAGE, total - shown)} more…</div>` : '';
   const el = document.getElementById('results');
   if (append) {
     document.getElementById('more')?.remove();
-    el.querySelector('h2').outerHTML = header;
-    el.insertAdjacentHTML('beforeend', body + more);
+    el.querySelector('h2').outerHTML = listHeader();
+    el.insertAdjacentHTML('beforeend', body + moreRow());
   } else {
-    el.innerHTML = header +
-      (rows.length ? body + more
+    el.innerHTML = listHeader() +
+      (rows.length ? body + moreRow()
         : '<p style="color:var(--muted)">Nothing matches these facets.</p>');
   }
+}
+
+// The pane's three queries: the entity's facts, the facts of its blank
+// nodes, and the links to it.
+function detailRows(iri) {
+  const inGraph = pattern => namedGraphs ? `GRAPH ?g { ${pattern} }` : pattern;
+  const g = namedGraphs ? '?g' : '';
+  // Incoming links are asked as they always were: grouped and labelled, then
+  // the first LINK_CAP by property. On a hub of a large store the grouping is
+  // what costs, and wd:Q5 took 26 s on QLever's Wikidata. There the page takes
+  // any LINK_CAP links first and labels them after (0.24 s), sorted only in the
+  // outer query. That form goes out in large-store mode, or once the usual one
+  // has missed the time limit, which switches the mode on. A small store keeps
+  // the links it always got. The PKG's bibo:Article has 2,260 links on a single
+  // property, answers in 90 ms, and any other form picks a different 200 of
+  // them (2026-09-27).
+  const incomingAsAlways = `${PREFIX}SELECT ?s ?p ${g} (SAMPLE(?sl) AS ?slabel) (SAMPLE(?pl) AS ?plabel) WHERE {
+      ${inGraph(`?s ?p <${iri}>`)}
+      OPTIONAL { ?s rdfs:label ?sl }
+      OPTIONAL { ?p rdfs:label ?pl }
+    } GROUP BY ?s ?p ${g} ORDER BY ?p LIMIT ${LINK_CAP + 1}`;
+  const incomingCapFirst = `${PREFIX}SELECT ?s ?p ${g} (SAMPLE(?sl) AS ?slabel) (SAMPLE(?pl) AS ?plabel) WHERE {
+      { SELECT DISTINCT ?s ?p ${g} WHERE { ${inGraph(`?s ?p <${iri}>`)} } LIMIT ${LINK_CAP + 1} }
+      OPTIONAL { ?s rdfs:label ?sl }
+      OPTIONAL { ?p rdfs:label ?pl }
+    } GROUP BY ?s ?p ${g} ORDER BY ?p`;
+  const incomingQuery = largeStore ? sparql(incomingCapFirst)
+    : sparqlWithin(incomingAsAlways, TIME_LIMIT).then(rows => {
+        if (rows) return rows;
+        largeStore = true;
+        return sparql(incomingCapFirst);
+      });
+  return Promise.all([
+    sparql(`${PREFIX}SELECT ?p ?o (SAMPLE(?pl) AS ?plabel) (SAMPLE(?ol) AS ?olabel) WHERE {
+      ${inGraph(`<${iri}> ?p ?o`)}
+      OPTIONAL { ?p rdfs:label ?pl }
+      OPTIONAL { ?o rdfs:label ?ol }
+    } GROUP BY ?p ?o ORDER BY ?p LIMIT ${FACT_CAP + 1}`),
+    sparql(`${PREFIX}SELECT ?p ?b ?p2 ?o2 (SAMPLE(?p2l) AS ?p2label) (SAMPLE(?o2l) AS ?o2label) WHERE {
+      ${inGraph(`<${iri}> ?p ?b . ?b ?p2 ?o2 . FILTER(isBlank(?b))`)}
+      OPTIONAL { ?p2 rdfs:label ?p2l }
+      OPTIONAL { ?o2 rdfs:label ?o2l }
+    } GROUP BY ?p ?b ?p2 ?o2 ORDER BY ?p ?b ?p2 LIMIT 300`),
+    incomingQuery,
+  ]);
 }
 
 async function loadDetail(iri, pane) {
@@ -906,35 +1095,45 @@ async function loadDetail(iri, pane) {
   // answer in two minutes where the two queries below take a fraction of a second.
   // Each list asks for one row past its cap, which is how the pane knows to
   // say it stopped short.
-  const [factRows, nestedRows, incomingRows] = await Promise.all([
-    sparql(`${PREFIX}SELECT ?p ?o ?g (SAMPLE(?pl) AS ?plabel) (SAMPLE(?ol) AS ?olabel) WHERE {
-      GRAPH ?g { <${iri}> ?p ?o }
-      OPTIONAL { ?p rdfs:label ?pl }
-      OPTIONAL { ?o rdfs:label ?ol }
-    } GROUP BY ?p ?o ?g ORDER BY ?p LIMIT ${FACT_CAP + 1}`),
-    sparql(`${PREFIX}SELECT ?p ?b ?g ?p2 ?o2 (SAMPLE(?p2l) AS ?p2label) (SAMPLE(?o2l) AS ?o2label) WHERE {
-      GRAPH ?g { <${iri}> ?p ?b . ?b ?p2 ?o2 . FILTER(isBlank(?b)) }
-      OPTIONAL { ?p2 rdfs:label ?p2l }
-      OPTIONAL { ?o2 rdfs:label ?o2l }
-    } GROUP BY ?p ?b ?g ?p2 ?o2 ORDER BY ?p ?b ?p2 LIMIT 300`),
-    sparql(`${PREFIX}SELECT ?s ?p ?g (SAMPLE(?sl) AS ?slabel) (SAMPLE(?pl) AS ?plabel) WHERE {
-      GRAPH ?g { ?s ?p <${iri}> }
-      OPTIONAL { ?s rdfs:label ?sl }
-      OPTIONAL { ?p rdfs:label ?pl }
-    } GROUP BY ?s ?p ?g ORDER BY ?p LIMIT ${LINK_CAP + 1}`),
-  ]);
+  // Facts are read from every named graph, or from the default graph of a
+  // store that has none. A fact is listed once however many graphs hold it:
+  // the Nobel Prize data keeps each in its data graph and again in a
+  // per-record metadata graph, and listing it per graph showed laureate/1's
+  // 18 facts as 36 (2026-09-29). Which graph holds a statement is shown only
+  // under "Linked from", where it tells the linking records apart.
+  // A pane asked inside graphs that finds nothing may have asked a store
+  // without any: the Graph section's answer can come after the pane's, or
+  // never.
+  const inGraphs = namedGraphs;
+  const [factRows, nestedRows, incomingRows] = await detailRows(iri);
+  if (!factRows.length && !incomingRows.length && inGraphs) {
+    if (!graphsKnown) {
+      const anyGraph = await sparql('SELECT ?g WHERE { GRAPH ?g { ?s ?p ?o } } LIMIT 1');
+      graphsKnown = true;
+      if (!anyGraph.length) namedGraphs = false;
+    }
+    if (!namedGraphs) return loadDetail(iri, pane);
+  }
+  const graphOf = r => r.g ? r.g.value : '';
   // A pane closed or replaced while its queries ran is no longer on the page.
   if (!pane.isConnected) return;
+  // Under "Linked from" each statement keeps its row, with the graph that
+  // holds it beside it, and the copies of one link held in several graphs sit
+  // together, so they read as one link stated in two places.
+  const term = t => `${t.type}|${t.value}|${t['xml:lang'] || ''}|${t.datatype || ''}`;
+  const together = key => (a, b) => key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0;
   const facts = factRows.slice(0, FACT_CAP);
-  const incoming = incomingRows.slice(0, LINK_CAP);
+  const incoming = incomingRows.slice(0, LINK_CAP)
+    .sort(together(r => `${r.p.value}|${term(r.s)}|${graphOf(r)}`));
   const moreFacts = factRows.length > FACT_CAP;
   const moreLinks = incomingRows.length > LINK_CAP;
+  const linkGraphs = new Set(incoming.map(graphOf).filter(Boolean)).size;
   // Fold each blank node's facts into its row. Matched by the blank node's
   // label when the endpoint keeps labels stable across queries (Oxigraph
   // does), otherwise by position under the same property.
   const nestedGroups = new Map();
   for (const r of nestedRows) {
-    const key = `${r.p.value}|${r.g.value}|${r.b.value}`;
+    const key = `${r.p.value}|${r.b.value}`;
     if (!nestedGroups.has(key)) nestedGroups.set(key, []);
     nestedGroups.get(key).push(r);
   }
@@ -942,7 +1141,7 @@ async function loadDetail(iri, pane) {
   for (const row of facts) {
     row.inner = [];
     if (row.o.type !== 'bnode') continue;
-    const under = `${row.p.value}|${row.g.value}`;
+    const under = row.p.value;
     const exact = nestedGroups.get(`${under}|${row.o.value}`);
     if (exact) { row.inner = exact; continue; }
     const groups = [...nestedGroups.entries()].filter(([k]) => k.startsWith(under + '|')).map(([, v]) => v);
@@ -981,6 +1180,10 @@ async function loadDetail(iri, pane) {
     : r.o.type === 'bnode'
       ? (r.inner.length ? innerHtml(r.inner) : '<span class="t">[blank node]</span>')
       : esc(r.o.value);
+  // The graph a link sits in, in grey beside it; nothing where the store has
+  // no named graphs.
+  const graphLine = r => !r.g ? '' :
+    ` <span class="t" style="font-size:11px" title="${esc(r.g.value)}">${esc(localName(r.g.value))}</span>`;
   const labelRow = facts.find(r => r.p.value === 'http://www.w3.org/2000/01/rdf-schema#label');
   const heading = labelRow ? labelRow.o.value : localName(iri);
   pane.querySelector('.spine').textContent = heading;
@@ -988,13 +1191,15 @@ async function loadDetail(iri, pane) {
     `<h2>Entity</h2>` +
     `<p class="ehead">${esc(heading)}</p>` +
     `<p><code title="${esc(iri)}">${esc(short(iri))}</code>${copyButton(iri)}${followLink(iri)}</p>` +
-    `<p class="t">${moreFacts ? `the first ${FACT_CAP}` : facts.length} facts across ` +
-    `${new Set(facts.map(r => r.g.value)).size} graph(s)` +
-    (incoming.length ? `; linked from ${moreLinks ? `more than ${LINK_CAP}` : incoming.length} place(s)` : '') +
+    // A link to the entity is a fact about it too, stated from the other end,
+    // so the count covers both lists; the links are counted again by the
+    // graphs they come from, which is what tells them apart.
+    `<p class="t">${moreFacts || moreLinks ? 'more than ' : ''}${facts.length + incoming.length} facts` +
+    (incoming.length ? `, ${moreLinks ? `more than ${LINK_CAP}` : incoming.length} of them linking here` +
+      (linkGraphs ? ` from ${linkGraphs} graph${linkGraphs === 1 ? '' : 's'}` : '') : '') +
     (moreFacts || moreLinks ? '; the rest are not shown' : '') + `</p>` +
     `<table>` + facts.map(r =>
-      `<tr>${propCell(r)}<td>${objCell(r)}
-        <div class="t" style="font-size:11px" title="${esc(r.g.value)}">${esc(localName(r.g.value))}</div></td></tr>`).join('') +
+      `<tr>${propCell(r)}<td>${objCell(r)}</td></tr>`).join('') +
     `</table>` +
     (incoming.length ? `<h2>Linked from</h2><table>` + incoming.map(r =>
       `<tr><td class="p" title="${esc(r.p.value)}">${esc(r.plabel ? r.plabel.value : localName(r.p.value))}</td>
@@ -1002,16 +1207,18 @@ async function loadDetail(iri, pane) {
           // A blank node has no IRI to open a pane on, so it is named, not linked.
           ? '<span class="t">[blank node]</span>'
           : `<a href="#" data-iri="${esc(r.s.value)}" title="${esc(r.s.value)}">${esc(r.slabel ? r.slabel.value : short(r.s.value))}</a>${followLink(r.s.value)}`}
-        <div class="t" style="font-size:11px" title="${esc(r.g.value)}">${esc(localName(r.g.value))}</div></td></tr>`).join('') +
+        ${graphLine(r)}</td></tr>`).join('') +
       `</table>` : '');
 }
 
 async function refresh() {
   const s = document.getElementById('status');
   const current = take('refresh');
+  view++;
   try {
     s.textContent = 'querying…';
     partial = false;
+    unanswered = false;
     state.offset = 0;
     await loadSettings();
     if (!await ensureSearch() || !current()) return;
@@ -1021,7 +1228,8 @@ async function refresh() {
       ? (FORCE_SPARQL ? ' (forced SPARQL scan)' : ' (no search sidecar; SPARQL scan)')
       : '';
     const cut = partial ? ' – the endpoint cut some answers short; counts may be incomplete' : '';
-    s.textContent = `connected to ${ENDPOINT}${scan}${cut}`;
+    const gap = unanswered ? ' – the store did not answer every count in time' : '';
+    s.textContent = `connected to ${ENDPOINT}${scan}${cut}${gap}`;
   } catch (e) {
     if (current()) fail(e);
   }

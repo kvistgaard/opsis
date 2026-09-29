@@ -8,3 +8,7 @@ decision-log.md
 SCALING.md
 SCALING-PLAN.md
 TODO.md
+
+# Measuring scripts and their output, private until decision F.
+bench/
+QUOTAWAKE-RESUMED.md

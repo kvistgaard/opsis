@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **show all** to reveal the full Class list
 
+### Changed
+
+- Entity and class counts, which now run faster
+- If the count is slow, the entity list fills it when it comes
+- The section with linked from now shows the named graphs of each triple
+- The entity pane's summary now count the number of graphs for the linked-from statements 
+
+### Fixed
+
+- The entity pane now shows facts on stores without named graphs
+- The entity pane now lists each fact once, even when several named graphs hold
+  it
+
 ## [0.2.0] – 2026-09-25
 
 ### Added
