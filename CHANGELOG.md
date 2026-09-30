@@ -13,8 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Entity and class counts, which now run faster
-- If the count is slow, the entity list fills it when it comes
 - The section with linked from now shows the named graphs of each triple
 - The entity pane's summary now count the number of graphs for the linked-from statements 
 

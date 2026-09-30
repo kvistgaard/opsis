@@ -525,78 +525,15 @@ const esc = s => String(s).replace(/[&<>"]/g, c =>
 // and whatever it had so far (Virtuoso does). The rows are kept and the status
 // line says the counts may be short, rather than passing them off as complete.
 let partial = false;
-// Whether the endpoint is QLever, which adds a `meta` block to its JSON
-// answers. It changes one test; see isIri below.
-let qlever = false;
-// Some endpoints refuse a client's queries beyond a few at once: QLever's
-// public Wikidata endpoint answers a fourth with 429 and an HTML page from its
-// web server (2026-09-27). The page sends as many queries as it likes until
-// the first refusal. From then on it keeps no more in flight than the endpoint
-// was carrying when it refused, and the refused query waits its turn and goes
-// again. A store that never refuses never sees the queue. QLever also answers
-// 429 to a query that ran out of time, but in JSON and after its 30 s; that
-// one is an answer and is not sent again.
-let inFlight = 0, maxInFlight = Infinity;
-const queue = [];
-async function takeSlot() {
-  while (inFlight >= maxInFlight) await new Promise(go => queue.push(go));
-  inFlight++;
-}
-function freeSlot() { inFlight--; queue.shift()?.(); }
-async function sparql(query, signal) {
-  for (let attempt = 1; ; attempt++) {
-    await takeSlot();
-    try {
-      const r = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: {'Accept': 'application/sparql-results+json'},
-        body: new URLSearchParams({query}),
-        signal,
-      });
-      const refused = r.status === 429 && !/json/.test(r.headers.get('content-type') || '');
-      if (refused && attempt < 5) {
-        largeStore = true;
-        maxInFlight = Math.max(1, Math.min(maxInFlight, inFlight - 1));
-        await r.text();
-        await new Promise(wait => setTimeout(wait, 200 * attempt));
-        continue;
-      }
-      if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
-      if (r.status === 206) partial = true;
-      const answer = await r.json();
-      if (answer.meta) qlever = true;
-      return answer.results.bindings;
-    } finally { freeSlot(); }
-  }
-}
-
-// Large-store mode. On every store the page asks what it has always asked,
-// until the store shows it is large: a query that misses TIME_LIMIT, or a
-// refusal (above). A small store never gets there; the slowest answer
-// measured on the PKG and the Nobel Prize data took 0.84 s (2026-09-27). From
-// then on, for the rest of the session, the page asks the cheaper forms of its
-// queries.
-const TIME_LIMIT = 1000;
-let largeStore = false;
-// A count that misses TIME_LIMIT is not waited for: the list shows without it
-// and the count fills in when it comes. A small store answers well inside the
-// limit, so it sees the page it always saw.
-const LATE = Symbol('late');
-const within = (promise, ms) =>
-  Promise.race([promise, new Promise(done => setTimeout(() => done(LATE), Math.max(0, ms)))]);
-// Counts refreshes, so that a count arriving late knows whether its view is
-// still the one on screen.
-let view = 0;
-// Whether a facet list went unanswered in this refresh.
-let unanswered = false;
-// A query with a time limit: its rows, or null once the limit has passed and
-// the request has been dropped.
-async function sparqlWithin(query, ms) {
-  const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), ms);
-  try { return await sparql(query, ctl.signal); }
-  catch (e) { if (ctl.signal.aborted) return null; throw e; }
-  finally { clearTimeout(timer); }
+async function sparql(query) {
+  const r = await fetch(ENDPOINT, {
+    method: 'POST',
+    headers: {'Accept': 'application/sparql-results+json'},
+    body: new URLSearchParams({query}),
+  });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  if (r.status === 206) partial = true;
+  return (await r.json()).results.bindings;
 }
 
 // Filters are built once and shared by the facet counts and the result list, so
@@ -619,29 +556,14 @@ const PREFIX = 'PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n';
 // skips them when it indexes; the SPARQL paths have to be told. Without this
 // the CONTAINS scan listed two blank subjects for "cohesion" and the date
 // lookup then built <b0>, which the endpoint rejects.
-// QLever raises an error in isIRI, isURI and isBlank for most of Wikidata's
-// item IRIs, which it stores in a compact form, and a filter drops any row
-// whose test fails with an error. On its Wikidata this page counted 5,313,729
-// humans of 13,711,077 (2026-09-28). Once an answer shows the endpoint is
-// QLever, an IRI is also recognised by its text; every other store gets the
-// test it always got.
-const isIri = v => qlever ? `(isIRI(${v}) || STRSTARTS(STR(${v}), "http"))` : `isIRI(${v})`;
-const whereWith = extra => `${filters() || '?s a ?anyClass .'}\n  FILTER(${isIri('?s')})${extra || ''}`;
+const IRI_ONLY = 'FILTER(isIRI(?s))';
+const whereWith = extra => `${filters() || '?s a ?anyClass .'}\n  ${IRI_ONLY}${extra || ''}`;
 
 // Labels and titles are looked up after counting, in the outer query. Joined
 // inside the aggregate, the title lookup ran once per quad: the graph facet
 // took ten times as long that way, for the same rows. Both count IRI subjects
 // only, as the list does; counting blank nodes made a graph's facet promise
 // several times the entities its list then showed.
-// The entity count and the class facet take the distinct subjects first and
-// count the rows, which is COUNT(DISTINCT ?s) by definition. On QLever's
-// Wikidata (2026-09-27, median of three) the count of humans fell from 5.6 s
-// to 0.36 s, and the class facet under "lighthouse" from 1.2 s to 0.7 s; on
-// the PKG and the Nobel Prize data both shapes timed the same, within noise.
-// The graph facet and the pins keep COUNT(DISTINCT): no graphs to measure on
-// QLever, and the pins' query ran slower there in the new shape (22 ms against
-// 389 ms of server time).
-const countOf = where => `SELECT (COUNT(*) AS ?n) WHERE { SELECT DISTINCT ?s WHERE { ${where} } }`;
 // A facet earns its section by offering a choice between groups: two values
 // or more, most of them holding more than one entity. The Nobel Prize store
 // fails it for graphs: beside its data graph it keeps each record's metadata
@@ -668,8 +590,7 @@ async function loadFacets(current) {
   // their own: outside the top forty, and at 0 under a filter that empties them.
   const pins = pinned();
   // The first unfiltered answer about graphs also says whether the store has
-  // any. It is read as soon as it comes, so a class list that times out, as
-  // Wikidata's does, cannot take it down with it.
+  // any.
   const unfiltered = !state.cls && !state.graph && !state.text;
   const learnGraphs = rows => {
     if (unfiltered && offered.graph === null) {
@@ -678,56 +599,43 @@ async function loadFacets(current) {
     }
     return rows;
   };
-  // Past the time limit the lists read "counting…", since the counts on screen
-  // belong to the previous view; a list the store does not answer says so.
-  const counting = setTimeout(() => {
-    if (!current()) return;
-    largeStore = true;
-    document.getElementById('facets').innerHTML = '<p class="t">counting…</p>';
-  }, TIME_LIMIT);
-  const settle = q => Promise.resolve(q).then(rows => rows, () => null);
   const [classes, graphs, pinRows] = await Promise.all([
-    !shown('cls') ? [] : settle(sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
-      { SELECT ?c (COUNT(*) AS ?n) WHERE { SELECT DISTINCT ?c ?s WHERE {
+    !shown('cls') ? [] : sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
+      { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
           ${filters('cls')}
           ?s a ?leaf .
           ?leaf rdfs:subClassOf* ?c .
-          FILTER(${isIri('?c')} && ${isIri('?s')})
-        } } GROUP BY ?c ORDER BY DESC(?n) ${allClasses ? '' : `LIMIT ${CLASS_CAP + 1}`} }
+          FILTER(isIRI(?c) && isIRI(?s))
+        } GROUP BY ?c ORDER BY DESC(?n) ${allClasses ? '' : `LIMIT ${CLASS_CAP + 1}`} }
       OPTIONAL { ?c rdfs:label ?l }
-    } GROUP BY ?c ?n ORDER BY DESC(?n)`)),
-    !shown('graph') ? [] : settle(sparql(`${PREFIX}SELECT ?g ?n (SAMPLE(?t) AS ?title) WHERE {
+    } GROUP BY ?c ?n ORDER BY DESC(?n)`),
+    !shown('graph') ? [] : sparql(`${PREFIX}SELECT ?g ?n (SAMPLE(?t) AS ?title) WHERE {
       { SELECT ?g (COUNT(DISTINCT ?s) AS ?n) WHERE {
           ${filters('graph')}
           GRAPH ?g { ?s ?gp ?go }
-          FILTER(${isIri('?s')})
+          FILTER(isIRI(?s))
         } GROUP BY ?g }
       OPTIONAL { ?g <http://purl.org/dc/terms/title> ?t }
-    } GROUP BY ?g ?n ORDER BY DESC(?n)`).then(learnGraphs)),
-    !pins.length ? [] : settle(sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
+    } GROUP BY ?g ?n ORDER BY DESC(?n)`).then(learnGraphs),
+    !pins.length ? [] : sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
       VALUES ?c { ${pins.map(c => `<${c}>`).join(' ')} }
       OPTIONAL { { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
           VALUES ?c { ${pins.map(c => `<${c}>`).join(' ')} }
           ${filters('cls')}
           ?s a ?leaf .
           ?leaf rdfs:subClassOf* ?c .
-          FILTER(${isIri('?s')})
+          FILTER(isIRI(?s))
         } GROUP BY ?c } }
       OPTIONAL { ?c rdfs:label ?l }
-    } GROUP BY ?c ?n`)),
+    } GROUP BY ?c ?n`),
   ]);
-  clearTimeout(counting);
   if (!current()) return;
-  if (classes === null || graphs === null || pinRows === null) unanswered = true;
   if (!state.cls && !state.graph && !state.text) {
-    if (offered.cls === null && classes) offered.cls = offersChoice(classes);
-    if (offered.graph === null && graphs) offered.graph = offersChoice(graphs);
+    if (offered.cls === null) offered.cls = offersChoice(classes);
+    if (offered.graph === null) offered.graph = offersChoice(graphs);
   }
-  const listedClasses = classes || [];
-  const more = !allClasses && listedClasses.length > CLASS_CAP;
-  facetRows = {classes: more ? listedClasses.slice(0, CLASS_CAP) : listedClasses,
-               graphs: graphs || [], pins: pinRows || [], more,
-               failed: {cls: classes === null, graph: graphs === null}};
+  const more = !allClasses && classes.length > CLASS_CAP;
+  facetRows = {classes: more ? classes.slice(0, CLASS_CAP) : classes, graphs, pins: pinRows, more};
   renderFacets();
 }
 
@@ -757,10 +665,8 @@ function renderFacets() {
                 <span>${esc(nm)}${hint}</span><span class="r">${pin}<span class="n">${n}</span></span></div>`;
     }).join('');
   };
-  const gap = key => facetRows.failed?.[key]
-    ? '<p class="t">The store did not answer in time.</p>' : '';
   const section = (key, title, body, show = shown(key)) => !show ? '' :
-    `<h2>${title} ${state[key] ? `<button class="clear" data-clear="${key}">clear</button>` : ''}</h2>` + gap(key) + body;
+    `<h2>${title} ${state[key] ? `<button class="clear" data-clear="${key}">clear</button>` : ''}</h2>` + body;
   const clsName = b => b.label ? b.label.value : localName(b.c.value);
   const own = ownPins && !samePins(ownPins, storePins);
   const pinbar = !pins.length && !own ? '' : `<div class="pinbar">${own ?
@@ -935,47 +841,7 @@ async function attachDates(rows) {
   for (const r of rows) r.date = byIri[r.iri];
 }
 
-// The total above the list: the count if it came within the time limit,
-// `…` while a late one is on its way, `?` if the store gave none.
-const awaitCount = (count, started) => !count ? Promise.resolve(null)
-  : within(count.catch(() => '?'), TIME_LIMIT - (performance.now() - started));
-function settleTotal(answer, count) {
-  if (answer === null) return state.total;
-  if (answer === '?') return '?';
-  if (answer !== LATE) return parseInt(answer[0].n.value, 10);
-  largeStore = true;
-  const shownView = view;
-  count.then(rows => {
-    if (view !== shownView) return;
-    state.total = parseInt(rows[0].n.value, 10);
-    drawTotal();
-  }, () => { if (view === shownView) { state.total = '?'; drawTotal(); } });
-  return '…';
-}
-// What the list shows, kept so a late total can redraw the header and the
-// "load more" row without the rows.
-let listed = { shown: 0, note: '', full: false };
-function listHeader() {
-  const { shown, note } = listed, total = state.total;
-  const glyph = state.sort === 'desc' ? '▼' : state.sort === 'asc' ? '▲' : '⇅';
-  return `<h2><span>Entities (${total ? `showing 1–${shown} of ${total}` : '0'}${note})</span>
-    <button class="clear" id="sortd" title="Sort by date: newest first / oldest first / off">date ${glyph}</button></h2>`;
-}
-function moreRow() {
-  const { shown, full } = listed, total = state.total;
-  const left = typeof total === 'number' ? total - shown : full ? PAGE : 0;
-  return left > 0
-    ? `<div class="row" id="more" style="color:var(--accent)">Load ${Math.min(PAGE, left)} more…</div>` : '';
-}
-function drawTotal() {
-  const el = document.getElementById('results');
-  el.querySelector('h2').outerHTML = listHeader();
-  document.getElementById('more')?.remove();
-  if (!el.querySelector('p')) el.insertAdjacentHTML('beforeend', moreRow());
-}
-
 async function loadResults(append, current) {
-  const started = performance.now();
   let rows, total;
   // The sidecar returns at most SEARCH_CAP hits, and every path that uses them
   // - the ranked list, the facet counts, the joins - sees only those.
@@ -993,14 +859,17 @@ async function loadResults(append, current) {
     // The page is chosen by IRI first and labelled after, so an entity with
     // two labels takes one row rather than two.
     const where = whereWith();
-    const count = append ? null : sparql(PREFIX + countOf(where));
-    const pageRows = await sparql(`${PREFIX}SELECT ?s (SAMPLE(?l) AS ?label) WHERE {
+    const [countRows, pageRows] = await Promise.all([
+      append ? Promise.resolve(null)
+             : sparql(`${PREFIX}SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ${where} }`),
+      sparql(`${PREFIX}SELECT ?s (SAMPLE(?l) AS ?label) WHERE {
         { SELECT DISTINCT ?s WHERE { ${where} } ORDER BY ?s LIMIT ${PAGE} OFFSET ${state.offset} }
         OPTIONAL { ?s rdfs:label ?l }
-      } GROUP BY ?s ORDER BY ?s`);
-    const countRows = await awaitCount(count, started);
+      } GROUP BY ?s ORDER BY ?s`),
+    ]);
     if (!current()) return;
-    total = settleTotal(countRows, count);
+    if (countRows) state.total = parseInt(countRows[0].n.value, 10);
+    total = state.total;
     rows = pageRows.map(b => ({ iri: b.s.value, label: b.label ? b.label.value : null }));
     await attachDates(rows);
   } else {
@@ -1009,34 +878,41 @@ async function loadResults(append, current) {
     // store-wide). Undated entities sink to the end under either direction.
     const where = whereWith();
     const order = `DESC(BOUND(?date)) ${state.sort === 'asc' ? 'ASC' : 'DESC'}(?date) ?s`;
-    const count = append ? null : sparql(PREFIX + countOf(where));
-    const pageRows = await sparql(`${PREFIX}SELECT ?s ?date (SAMPLE(?l) AS ?label) WHERE {
+    const [countRows, pageRows] = await Promise.all([
+      append ? Promise.resolve(null)
+             : sparql(`${PREFIX}SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ${where} }`),
+      sparql(`${PREFIX}SELECT ?s ?date (SAMPLE(?l) AS ?label) WHERE {
         { SELECT ?s (MIN(?d) AS ?date) WHERE {
             ${where}
             OPTIONAL { ?s ?dp ?d . ${DATE_FILTER} }
           } GROUP BY ?s
           ORDER BY ${order} LIMIT ${PAGE} OFFSET ${state.offset} }
         OPTIONAL { ?s rdfs:label ?l }
-      } GROUP BY ?s ?date ORDER BY ${order}`);
-    const countRows = await awaitCount(count, started);
+      } GROUP BY ?s ?date ORDER BY ${order}`),
+    ]);
     if (!current()) return;
-    total = settleTotal(countRows, count);
+    if (countRows) state.total = parseInt(countRows[0].n.value, 10);
+    total = state.total;
     rows = pageRows.map(b => ({ iri: b.s.value,
                                 label: b.label ? b.label.value : null,
                                 date: b.date ? b.date.value.slice(0, 10) : null }));
   }
   if (!current()) return;
-  state.total = total;
-  listed = { shown: state.offset + rows.length, note, full: rows.length === PAGE };
+  const shown = state.offset + rows.length;
+  const glyph = state.sort === 'desc' ? '▼' : state.sort === 'asc' ? '▲' : '⇅';
+  const header = `<h2><span>Entities (${total ? `showing 1–${shown} of ${total}` : '0'}${note})</span>
+    <button class="clear" id="sortd" title="Sort by date: newest first / oldest first / off">date ${glyph}</button></h2>`;
   const body = rows.map(r => rowHtml(r.iri, r.label, r.date)).join('');
+  const more = shown < total
+    ? `<div class="row" id="more" style="color:var(--accent)">Load ${Math.min(PAGE, total - shown)} more…</div>` : '';
   const el = document.getElementById('results');
   if (append) {
     document.getElementById('more')?.remove();
-    el.querySelector('h2').outerHTML = listHeader();
-    el.insertAdjacentHTML('beforeend', body + moreRow());
+    el.querySelector('h2').outerHTML = header;
+    el.insertAdjacentHTML('beforeend', body + more);
   } else {
-    el.innerHTML = listHeader() +
-      (rows.length ? body + moreRow()
+    el.innerHTML = header +
+      (rows.length ? body + more
         : '<p style="color:var(--muted)">Nothing matches these facets.</p>');
   }
 }
@@ -1046,31 +922,11 @@ async function loadResults(append, current) {
 function detailRows(iri) {
   const inGraph = pattern => namedGraphs ? `GRAPH ?g { ${pattern} }` : pattern;
   const g = namedGraphs ? '?g' : '';
-  // Incoming links are asked as they always were: grouped and labelled, then
-  // the first LINK_CAP by property. On a hub of a large store the grouping is
-  // what costs, and wd:Q5 took 26 s on QLever's Wikidata. There the page takes
-  // any LINK_CAP links first and labels them after (0.24 s), sorted only in the
-  // outer query. That form goes out in large-store mode, or once the usual one
-  // has missed the time limit, which switches the mode on. A small store keeps
-  // the links it always got. The PKG's bibo:Article has 2,260 links on a single
-  // property, answers in 90 ms, and any other form picks a different 200 of
-  // them (2026-09-27).
-  const incomingAsAlways = `${PREFIX}SELECT ?s ?p ${g} (SAMPLE(?sl) AS ?slabel) (SAMPLE(?pl) AS ?plabel) WHERE {
+  const incoming = `${PREFIX}SELECT ?s ?p ${g} (SAMPLE(?sl) AS ?slabel) (SAMPLE(?pl) AS ?plabel) WHERE {
       ${inGraph(`?s ?p <${iri}>`)}
       OPTIONAL { ?s rdfs:label ?sl }
       OPTIONAL { ?p rdfs:label ?pl }
     } GROUP BY ?s ?p ${g} ORDER BY ?p LIMIT ${LINK_CAP + 1}`;
-  const incomingCapFirst = `${PREFIX}SELECT ?s ?p ${g} (SAMPLE(?sl) AS ?slabel) (SAMPLE(?pl) AS ?plabel) WHERE {
-      { SELECT DISTINCT ?s ?p ${g} WHERE { ${inGraph(`?s ?p <${iri}>`)} } LIMIT ${LINK_CAP + 1} }
-      OPTIONAL { ?s rdfs:label ?sl }
-      OPTIONAL { ?p rdfs:label ?pl }
-    } GROUP BY ?s ?p ${g} ORDER BY ?p`;
-  const incomingQuery = largeStore ? sparql(incomingCapFirst)
-    : sparqlWithin(incomingAsAlways, TIME_LIMIT).then(rows => {
-        if (rows) return rows;
-        largeStore = true;
-        return sparql(incomingCapFirst);
-      });
   return Promise.all([
     sparql(`${PREFIX}SELECT ?p ?o (SAMPLE(?pl) AS ?plabel) (SAMPLE(?ol) AS ?olabel) WHERE {
       ${inGraph(`<${iri}> ?p ?o`)}
@@ -1082,7 +938,7 @@ function detailRows(iri) {
       OPTIONAL { ?p2 rdfs:label ?p2l }
       OPTIONAL { ?o2 rdfs:label ?o2l }
     } GROUP BY ?p ?b ?p2 ?o2 ORDER BY ?p ?b ?p2 LIMIT 300`),
-    incomingQuery,
+    sparql(incoming),
   ]);
 }
 
@@ -1214,11 +1070,9 @@ async function loadDetail(iri, pane) {
 async function refresh() {
   const s = document.getElementById('status');
   const current = take('refresh');
-  view++;
   try {
     s.textContent = 'querying…';
     partial = false;
-    unanswered = false;
     state.offset = 0;
     await loadSettings();
     if (!await ensureSearch() || !current()) return;
@@ -1228,8 +1082,7 @@ async function refresh() {
       ? (FORCE_SPARQL ? ' (forced SPARQL scan)' : ' (no search sidecar; SPARQL scan)')
       : '';
     const cut = partial ? ' – the endpoint cut some answers short; counts may be incomplete' : '';
-    const gap = unanswered ? ' – the store did not answer every count in time' : '';
-    s.textContent = `connected to ${ENDPOINT}${scan}${cut}${gap}`;
+    s.textContent = `connected to ${ENDPOINT}${scan}${cut}`;
   } catch (e) {
     if (current()) fail(e);
   }
