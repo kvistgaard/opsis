@@ -128,10 +128,10 @@
   code { font:12px/1.4 ui-monospace,Consolas,monospace; word-break:break-all; }
   button.clear { border:0; background:none; color:var(--accent); cursor:pointer;
                  font-size:12px; padding:0; text-transform:none; letter-spacing:normal; }
-  #catlink { font-size:12px; border:0; background:none; color:var(--accent);
+  #catlink, #voidcopy { font-size:12px; border:0; background:none; color:var(--accent);
              cursor:pointer; padding:0; text-transform:none; letter-spacing:normal;
              font-family:inherit; }
-  #catlink:hover { text-decoration:underline; }
+  #catlink:hover, #voidcopy:hover { text-decoration:underline; }
   /* A blank-node value (a class partition, say) is shown inline as its own
      facts, since it has no page of its own to open. */
   .kv .k { color:var(--muted); font-size:12px; margin-right:3px; }
@@ -206,6 +206,7 @@
   <select id="ep" title="Which SPARQL endpoint to read through" hidden></select>
   <button id="panes" title="Stacked panes: open each entity beside the one it was opened from" aria-pressed="false">stack</button>
   <button id="catlink" title="The data catalogue: every dataset, its files, graphs and record counts" hidden>catalogue</button>
+  <button id="voidcopy" title="Copy the graphs this link is scoped to as a VoID description" hidden>copy as VoID</button>
   <input id="q" placeholder="search…" autocomplete="off"
          title="Searches every string value an entity carries, not only labels">
   <a id="gh-link" href="https://github.com/kvistgaard/opsis" target="_blank" rel="noopener noreferrer"
@@ -266,6 +267,44 @@ let searchTotal = 0;
 const FORCE_SPARQL =
   new URLSearchParams(location.search).get('search') === 'sparql';
 
+// A list of named graphs to treat as the whole dataset, given directly in
+// the URL rather than discovered from the store: a public, read-only store
+// cannot be told to describe its own subsets, since it takes no writes, and
+// may be too large to scan for its classes or to enumerate its graphs from.
+// Every count and list then runs only inside these graphs, which the engine
+// answers from their own indexes instead of the whole store. This is the
+// flat form of a void:Dataset's void:subset -> sd:NamedGraph -> sd:name
+// list; giving it as one parameter keeps the whole setting in one link, to
+// share or to publish, on GitHub Pages or anywhere else. The IRIs are
+// separated by spaces, as in the reactodia fork's sparql-graph parameter:
+// an IRI may hold a comma, never a space. An entry that is not a clean
+// absolute IRI is dropped rather than spliced into a query - the same guard
+// attachDates uses on IRIs from the store.
+// The scope is written into each query rather than sent as the protocol's
+// default-graph-uri, which the reactodia fork uses: the PKG's server and
+// the Nobel Prize data's EntryStore both ignore that parameter without a
+// word and answer for the whole store (2026-10-02).
+// `?dates=off` leaves out the date column and the date sort. Every page of
+// the list asks the store for its entities' dates; on a large store that is
+// most of a click's time (about 1 s of a search on Wikidata through QLever,
+// 2026-10-02), and dates matter for a personal knowledge graph, seldom at
+// scale. Absent, the page asks for dates as it always has.
+const NO_DATES = new URLSearchParams(location.search).get('dates') === 'off';
+
+const GIVEN_GRAPHS = (new URLSearchParams(location.search).get('graphs') || '')
+  .split(/\s+/).filter(g => /^[a-z][a-z0-9+.-]*:/i.test(g) && !/[\s<>"{}|^`\\]/.test(g));
+const graphList = GIVEN_GRAPHS.map(g => `<${g}>`).join(' ');
+// A pattern scoped to the given graphs, under a graph variable of its own.
+// Patterns in one query never share it: a shared variable would make the
+// type assertion, a search match and a date all come from the same graph,
+// though an entity may state its type in one graph and its name in another.
+const inGiven = (v, pattern) => `VALUES ?${v} { ${graphList} }\n  GRAPH ?${v} { ${pattern} }`;
+// The same for a query whose own ?g is the graph it reads or counts by;
+// empty when none were given, so such a query reads exactly as it did
+// before this setting existed.
+const GRAPH_VALUES = GIVEN_GRAPHS.length ? `VALUES ?g { ${graphList} }\n  ` : '';
+document.getElementById('voidcopy').hidden = !GIVEN_GRAPHS.length;
+
 async function probeSearchApi() {
   if (FORCE_SPARQL) { searchApi = false; return; }
   if (searchApi !== null) return;
@@ -312,7 +351,11 @@ function textClause() {
   if (!state.text) return '';
   if (searchHits) return `VALUES ?s { ${searchHits.map(h => `<${h.iri}>`).join(' ')} }`;
   const t = state.text.replace(/["\\]/g, '\\$&');
-  return `?s ?sfP ?sfV . FILTER(isLiteral(?sfV) && CONTAINS(LCASE(STR(?sfV)), LCASE("${t}")))`;
+  // Unscoped, this scans every literal of the store; a given graph list
+  // keeps the scan inside it, as every other query here does.
+  return GIVEN_GRAPHS.length
+    ? `${inGiven('gText', '?s ?sfP ?sfV')} FILTER(isLiteral(?sfV) && CONTAINS(LCASE(STR(?sfV)), LCASE("${t}")))`
+    : `?s ?sfP ?sfV . FILTER(isLiteral(?sfV) && CONTAINS(LCASE(STR(?sfV)), LCASE("${t}")))`;
 }
 
 // Display prefixes. Vocabularies that declare their own prefix are read from
@@ -382,6 +425,9 @@ function loadSettings() {
 // nothing asks the store once, and asks again outside any graph if it has none.
 let namedGraphs = true;
 let graphsKnown = false;
+// A given graph list already answers both questions this flag pair tracks:
+// yes, the store has named graphs, and they are exactly these.
+if (GIVEN_GRAPHS.length) { namedGraphs = true; graphsKnown = true; }
 // The endpoints on offer are the ones the catalogue already describes: DCAT's
 // own dcat:DataService and dcat:endpointURL. No term of our own, because a query service is exactly what DCAT is for - and because a
 // second endpoint then advertises itself to this page merely by describing
@@ -450,6 +496,21 @@ async function loadPins() {
 // The browser's pins as Turtle, ready for the settings graph. A store with a
 // named configuration gets the triple on that node; one without gets a new
 // configuration of its own.
+// The scope of this link as VoID: the store as a dataset at its endpoint,
+// each given graph a subset of it. The link stays the setting, since the
+// store takes no writes; this is the same scope in the vocabulary a
+// catalogue would hold it in.
+function scopeVoid() {
+  const subsets = GIVEN_GRAPHS
+    .map(g => `    [ a void:Dataset, sd:NamedGraph ; sd:name <${g}> ]`).join(' ,\n');
+  return '@prefix void: <http://rdfs.org/ns/void#> .\n' +
+    '@prefix sd: <http://www.w3.org/ns/sparql-service-description#> .\n\n' +
+    `# Opened in Opsis as ${location.href}\n` +
+    '[] a void:Dataset ;\n' +
+    `  void:sparqlEndpoint <${ENDPOINT}> ;\n` +
+    `  void:subset\n${subsets} .\n`;
+}
+
 function pinsTurtle() {
   const items = pinned().map(c => `    <${c}>`).join('\n');
   const subject = storeConfig ? `<${storeConfig}>` : '[] a cfg:Configuration ;\n   ';
@@ -542,7 +603,18 @@ async function sparql(query) {
 // so the count beside the value is the length of the list the click opens.
 function filters(except) {
   const out = [];
-  if (state.cls && except !== 'cls') out.push(`?s a/rdfs:subClassOf* <${state.cls}> .`);
+  if (state.cls && except !== 'cls') {
+    // Unscoped, the path a/rdfs:subClassOf* resolves every step - the type
+    // assertion and every subclass hop - against the one graph it is asked
+    // in, the whole store by default. A given graph list has to scope only
+    // the type assertion, not the hierarchy above it: the classes a class
+    // list ever holds number in the thousands even on Wikidata, cheap
+    // wherever they live, but an ontology kept apart from its data, in its
+    // own graph, would go unseen if the hierarchy walk were scoped too.
+    out.push(GIVEN_GRAPHS.length
+      ? `?leaf rdfs:subClassOf* <${state.cls}> .\n  ${inGiven('gType', '?s a ?leaf')}`
+      : `?s a/rdfs:subClassOf* <${state.cls}> .`);
+  }
   if (state.graph && except !== 'graph') out.push(`GRAPH <${state.graph}> { ?s ?anyP ?anyO }`);
   const t = textClause();
   if (t) out.push(t);
@@ -557,7 +629,8 @@ const PREFIX = 'PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n';
 // the CONTAINS scan listed two blank subjects for "cohesion" and the date
 // lookup then built <b0>, which the endpoint rejects.
 const IRI_ONLY = 'FILTER(isIRI(?s))';
-const whereWith = extra => `${filters() || '?s a ?anyClass .'}\n  ${IRI_ONLY}${extra || ''}`;
+const noFilter = GIVEN_GRAPHS.length ? inGiven('gType', '?s a ?anyClass') : '?s a ?anyClass .';
+const whereWith = extra => `${filters() || noFilter}\n  ${IRI_ONLY}${extra || ''}`;
 
 // Labels and titles are looked up after counting, in the outer query. Joined
 // inside the aggregate, the title lookup ran once per quad: the graph facet
@@ -593,17 +666,25 @@ async function loadFacets(current) {
   // any.
   const unfiltered = !state.cls && !state.graph && !state.text;
   const learnGraphs = rows => {
-    if (unfiltered && offered.graph === null) {
+    // A given graph list already settled this; an empty answer then means
+    // the list is wrong or its graphs are empty, not that the store has none.
+    if (!GIVEN_GRAPHS.length && unfiltered && offered.graph === null) {
       graphsKnown = true;
       if (!rows.length) namedGraphs = false;
     }
     return rows;
   };
+  // Unscoped, ?s a ?leaf resolves against the whole store: the one query
+  // this page could never finish on Wikidata's 119.7 million typed entities.
+  // A given graph list scopes exactly this triple, as filters() does for a
+  // selected class; the hierarchy walk under it stays open, for the same
+  // reason given there.
+  const typed = GIVEN_GRAPHS.length ? inGiven('gType', '?s a ?leaf') : '?s a ?leaf .';
   const [classes, graphs, pinRows] = await Promise.all([
     !shown('cls') ? [] : sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
       { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
           ${filters('cls')}
-          ?s a ?leaf .
+          ${typed}
           ?leaf rdfs:subClassOf* ?c .
           FILTER(isIRI(?c) && isIRI(?s))
         } GROUP BY ?c ORDER BY DESC(?n) ${allClasses ? '' : `LIMIT ${CLASS_CAP + 1}`} }
@@ -612,7 +693,7 @@ async function loadFacets(current) {
     !shown('graph') ? [] : sparql(`${PREFIX}SELECT ?g ?n (SAMPLE(?t) AS ?title) WHERE {
       { SELECT ?g (COUNT(DISTINCT ?s) AS ?n) WHERE {
           ${filters('graph')}
-          GRAPH ?g { ?s ?gp ?go }
+          ${GRAPH_VALUES}GRAPH ?g { ?s ?gp ?go }
           FILTER(isIRI(?s))
         } GROUP BY ?g }
       OPTIONAL { ?g <http://purl.org/dc/terms/title> ?t }
@@ -622,7 +703,7 @@ async function loadFacets(current) {
       OPTIONAL { { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
           VALUES ?c { ${pins.map(c => `<${c}>`).join(' ')} }
           ${filters('cls')}
-          ?s a ?leaf .
+          ${typed}
           ?leaf rdfs:subClassOf* ?c .
           FILTER(isIRI(?s))
         } GROUP BY ?c } }
@@ -829,13 +910,14 @@ const rowHtml = (iri, label, date) =>
 // Dates for just the visible page - one VALUES query over 200 subjects,
 // so the default view never pays for a store-wide date scan.
 async function attachDates(rows) {
+  if (NO_DATES) return;
   // An IRI carrying whitespace or angle brackets would break out of the
   // VALUES block; drop it rather than send a malformed query.
   const safe = rows.filter(r => /^[a-z][a-z0-9+.-]*:/i.test(r.iri) && !/[\s<>"{}|^`]/.test(r.iri));
   if (!safe.length) return;
   const dates = await sparql(`SELECT ?s (MIN(?d) AS ?date) WHERE {
     VALUES ?s { ${safe.map(r => `<${r.iri}>`).join(' ')} }
-    ?s ?dp ?d . ${DATE_FILTER}
+    ${GIVEN_GRAPHS.length ? inGiven('gDate', '?s ?dp ?d') : '?s ?dp ?d .'} ${DATE_FILTER}
   } GROUP BY ?s`);
   const byIri = Object.fromEntries(dates.map(b => [b.s.value, b.date.value.slice(0, 10)]));
   for (const r of rows) r.date = byIri[r.iri];
@@ -881,12 +963,17 @@ async function loadResults(append, current) {
     const [countRows, pageRows] = await Promise.all([
       append ? Promise.resolve(null)
              : sparql(`${PREFIX}SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ${where} }`),
+      // The order is taken one level above the aggregate: Virtuoso refuses
+      // BOUND(?date) in the ORDER BY of the query that computes ?date as
+      // MIN(?d), so date sort failed on CORDIS and every Virtuoso store.
+      // The PKG and the Nobel data give the same rows either way (2026-10-02).
       sparql(`${PREFIX}SELECT ?s ?date (SAMPLE(?l) AS ?label) WHERE {
-        { SELECT ?s (MIN(?d) AS ?date) WHERE {
-            ${where}
-            OPTIONAL { ?s ?dp ?d . ${DATE_FILTER} }
-          } GROUP BY ?s
-          ORDER BY ${order} LIMIT ${PAGE} OFFSET ${state.offset} }
+        { SELECT ?s ?date WHERE {
+            { SELECT ?s (MIN(?d) AS ?date) WHERE {
+                ${where}
+                OPTIONAL { ${GIVEN_GRAPHS.length ? inGiven('gDate', '?s ?dp ?d') : '?s ?dp ?d .'} ${DATE_FILTER} }
+              } GROUP BY ?s }
+          } ORDER BY ${order} LIMIT ${PAGE} OFFSET ${state.offset} }
         OPTIONAL { ?s rdfs:label ?l }
       } GROUP BY ?s ?date ORDER BY ${order}`),
     ]);
@@ -901,7 +988,7 @@ async function loadResults(append, current) {
   const shown = state.offset + rows.length;
   const glyph = state.sort === 'desc' ? '▼' : state.sort === 'asc' ? '▲' : '⇅';
   const header = `<h2><span>Entities (${total ? `showing 1–${shown} of ${total}` : '0'}${note})</span>
-    <button class="clear" id="sortd" title="Sort by date: newest first / oldest first / off">date ${glyph}</button></h2>`;
+    ${NO_DATES ? '' : `<button class="clear" id="sortd" title="Sort by date: newest first / oldest first / off">date ${glyph}</button>`}</h2>`;
   const body = rows.map(r => rowHtml(r.iri, r.label, r.date)).join('');
   const more = shown < total
     ? `<div class="row" id="more" style="color:var(--accent)">Load ${Math.min(PAGE, total - shown)} more…</div>` : '';
@@ -920,7 +1007,10 @@ async function loadResults(append, current) {
 // The pane's three queries: the entity's facts, the facts of its blank
 // nodes, and the links to it.
 function detailRows(iri) {
-  const inGraph = pattern => namedGraphs ? `GRAPH ?g { ${pattern} }` : pattern;
+  // A given graph list scopes the pane too, so it never shows a fact or a
+  // link that the facets and the list above it have already ruled out of
+  // the declared dataset.
+  const inGraph = pattern => namedGraphs ? `${GRAPH_VALUES}GRAPH ?g { ${pattern} }` : pattern;
   const g = namedGraphs ? '?g' : '';
   const incoming = `${PREFIX}SELECT ?s ?p ${g} (SAMPLE(?sl) AS ?slabel) (SAMPLE(?pl) AS ?plabel) WHERE {
       ${inGraph(`?s ?p <${iri}>`)}
@@ -1082,7 +1172,9 @@ async function refresh() {
       ? (FORCE_SPARQL ? ' (forced SPARQL scan)' : ' (no search sidecar; SPARQL scan)')
       : '';
     const cut = partial ? ' – the endpoint cut some answers short; counts may be incomplete' : '';
-    s.textContent = `connected to ${ENDPOINT}${scan}${cut}`;
+    const scope = GIVEN_GRAPHS.length
+      ? `, ${GIVEN_GRAPHS.length} graph${GIVEN_GRAPHS.length === 1 ? '' : 's'} only` : '';
+    s.textContent = `connected to ${ENDPOINT}${scope}${scan}${cut}`;
   } catch (e) {
     if (current()) fail(e);
   }
@@ -1138,6 +1230,14 @@ document.addEventListener('click', e => {
   if (pin) { togglePin(pin.dataset.pin); return; }
   if (e.target.id === 'pinreset') { resetPins(); renderFacets(); return; }
   if (e.target.id === 'allcls') { allClasses = true; loadFacets(take('facets')).catch(fail); return; }
+  if (e.target.id === 'voidcopy') {
+    const b = e.target;
+    copyText(scopeVoid()).then(() => {
+      b.textContent = 'copied';
+      setTimeout(() => { b.textContent = 'copy as VoID'; }, 1200);
+    });
+    return;
+  }
   if (e.target.id === 'pincopy') {
     const b = e.target;
     copyText(pinsTurtle()).then(() => {
