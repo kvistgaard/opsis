@@ -158,6 +158,47 @@
   body.stacked .pane.here { box-shadow:-6px 0 10px -8px rgba(0,0,0,.4), inset 3px 0 0 var(--accent); }
   #ep { font: inherit; font-size:12px; color:var(--ink); background:var(--panel);
         border:1px solid var(--line); border-radius:3px; padding:1px 4px; max-width:22em; }
+  @media (pointer: coarse) and (max-width: 640px), (pointer: coarse) and (max-height: 500px) {
+    body { height:100vh; height:100dvh; }
+    header { padding:8px 12px; gap:6px 10px; align-items:center; }
+    header::after { content:''; order:3; flex-basis:100%; }
+    #q { order:1; flex:1; min-width:0; margin-left:0; font-size:16px; }
+    #gh-link { order:2; }
+    #status { order:4; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #ep, #catlink, #voidcopy { order:5; }
+    #panes { display:none; }
+    #nav:not([hidden]) { display:flex; align-items:center; gap:8px; padding:0 12px 0 4px;
+                         border-bottom:1px solid var(--line); }
+    #back { border:0; background:none; color:var(--accent); font:inherit; font-size:15px;
+            padding:10px 8px; cursor:pointer; min-width:0; white-space:nowrap;
+            overflow:hidden; text-overflow:ellipsis; }
+    #scope { display:flex; gap:6px; margin-left:auto; min-width:0; }
+    .chip { font:inherit; font-size:12px; border:0; border-radius:4px; padding:4px 8px;
+            background:var(--accent); color:var(--on-accent); cursor:pointer; min-width:0;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    main { display:flex; overflow:hidden; overflow:clip; }
+    #strip, #detail { display:contents; }
+    #facets, #results, #detail > .pane {
+      flex:0 0 100%; width:100%; min-width:0; max-width:none; resize:none;
+      overflow-x:hidden; overflow-y:auto; padding:12px 14px; border-right:0;
+      overflow-wrap:anywhere; transform:translateX(calc(var(--at, 0) * -100%));
+      transition:transform .25s ease; }
+    main.instant #facets, main.instant #results, main.instant #detail > .pane { transition:none; }
+    #detail > .pane:not([data-iri]) { display:none; }
+    .facet { padding:9px 8px; }
+    .row { padding:8px 6px; }
+    button.pin { opacity:.35; padding:6px; margin:-6px; }
+    .facet.pinned button.pin { opacity:.6; }
+    button.copy { padding:6px; margin-top:-6px; margin-bottom:-6px; }
+    a.ext { padding:6px 4px; }
+    #detail table, #detail tbody, #detail tr, #detail td { display:block; width:auto; }
+    #detail td.p { white-space:normal; border-bottom:0; padding:7px 6px 0;
+                   color:var(--muted); font-size:12px; }
+    #detail td.p + td { padding:1px 6px 7px; }
+    @media (prefers-reduced-motion: reduce) {
+      #facets, #results, #detail > .pane { transition:none; }
+    }
+  }
 </style>
 </head>
 <body>
@@ -174,7 +215,7 @@
   <button id="panes" title="Stacked panes: open each entity beside the one it was opened from" aria-pressed="false">stack</button>
   <button id="catlink" title="The data catalogue: every dataset, its files, graphs and record counts" hidden>catalogue</button>
   <button id="voidcopy" title="Copy the graphs this link is scoped to as a VoID description" hidden>copy as VoID</button>
-  <input id="q" placeholder="search…" autocomplete="off"
+  <input id="q" placeholder="search…" autocomplete="off" enterkeyhint="search"
          title="Searches every string value an entity carries, not only labels">
   <a id="gh-link" href="https://github.com/kvistgaard/opsis" target="_blank" rel="noopener noreferrer"
      aria-label="View source on GitHub" title="View source on GitHub">
@@ -183,6 +224,7 @@
     </svg>
   </a>
 </header>
+<nav id="nav" hidden><button id="back"></button><span id="scope"></span></nav>
 <main>
   <section id="facets"></section>
   <div id="strip">
@@ -1070,6 +1112,7 @@ function newPane(iri) {
 }
 
 function openEntity(iri, from) {
+  if (phone.matches) return openOnPhone(iri, from);
   detail.querySelectorAll('.pane:not([data-iri])').forEach(p => p.remove());
   const open = panes();
   if (stacked) {
@@ -1118,7 +1161,7 @@ addEventListener('resize', coverSoon);
 function setStacked(on) {
   stacked = on;
   remember(PANES, on ? 'stacked' : 'single');
-  document.body.classList.toggle('stacked', on);
+  document.body.classList.toggle('stacked', on && !phone.matches);
   detail.classList.toggle('stack', on);
   document.getElementById('panes').setAttribute('aria-pressed', String(on));
   if (!on) panes().slice(0, -1).forEach(p => p.remove());
@@ -1127,6 +1170,7 @@ function setStacked(on) {
 }
 
 function syncUrl() {
+  if (phone.matches) return;
   const params = new URLSearchParams(location.search);
   params.delete('open');
   for (const p of panes()) params.append('open', p.dataset.iri);
@@ -1136,15 +1180,141 @@ function syncUrl() {
   history.replaceState(null, '', q ? `?${q}` : location.pathname);
 }
 
-const reopen = new URLSearchParams(location.search).getAll('open');
-setStacked(stacked);
-refresh().then(() => {
-  let from = null;
-  for (const iri of stacked ? reopen : reopen.slice(-1)) {
-    openEntity(iri, from);
-    from = panes().at(-1);
+const phone = matchMedia('(pointer: coarse) and (max-width: 640px), (pointer: coarse) and (max-height: 500px)');
+const mainEl = document.querySelector('main');
+const nav = document.getElementById('nav');
+let atPage = 0;
+let slideBack = false;
+const pages = () => [facetsEl, results, ...panes()];
+const firstPage = () => offered.cls !== null && !facetsEl.querySelector('.facet') ? 1 : 0;
+
+function show(n, instant) {
+  const all = pages();
+  atPage = Math.min(Math.max(n, firstPage()), all.length - 1);
+  void mainEl.offsetWidth;
+  mainEl.classList.toggle('instant', !!instant);
+  mainEl.style.setProperty('--at', atPage);
+  if (instant) { void mainEl.offsetWidth; mainEl.classList.remove('instant'); }
+  all.forEach((p, i) => { p.inert = i !== atPage; });
+  renderNav();
+}
+
+function renderNav() {
+  if (!phone.matches) return;
+  nav.hidden = atPage <= firstPage();
+  if (nav.hidden) return;
+  const name = n => n === 0 ? (shown('cls') || pinned().length ? 'Classes' : 'Graphs')
+    : n === 1 ? 'Entities' : panes()[n - 2].querySelector('.spine').textContent;
+  document.getElementById('back').textContent = `‹ ${name(atPage - 1)}`;
+  document.getElementById('scope').innerHTML = atPage !== 1 ? '' :
+    ['cls', 'graph'].filter(k => state[k]).map(k => {
+      const v = state[k];
+      const b = k === 'cls' ? [...facetRows.pins, ...facetRows.classes].find(r => r.c.value === v)
+                            : facetRows.graphs.find(r => r.g.value === v);
+      const label = b && (k === 'cls' ? b.label : b.title);
+      const nm = esc(label ? label.value : localName(v));
+      return `<button class="chip" data-clear="${k}" aria-label="Clear ${nm}">${nm} ×</button>`;
+    }).join('');
+}
+
+function goTo(n) {
+  const from = atPage;
+  show(n);
+  history.pushState({opsis: true, at: atPage, up: atPage === from + 1}, '', phoneHref());
+}
+function phoneHref() {
+  const params = new URLSearchParams(location.search);
+  params.delete('open');
+  for (const p of panes().slice(0, Math.max(0, atPage - 1))) params.append('open', p.dataset.iri);
+  const q = params.toString();
+  return q ? `?${q}` : location.pathname;
+}
+
+function openOnPhone(iri, from) {
+  detail.querySelectorAll('.pane:not([data-iri])').forEach(p => p.remove());
+  const open = panes();
+  const k = from ? open.indexOf(from) : -1;
+  if (!open[k + 1] || open[k + 1].dataset.iri !== iri) {
+    open.slice(k + 1).forEach(p => p.remove());
+    const p = newPane(iri);
+    detail.append(p);
+    loadDetail(iri, p).then(renderNav, fail);
   }
+  goTo(k + 3);
+}
+
+function restore(want, n, instant, ready = Promise.resolve()) {
+  const open = panes();
+  let i = 0;
+  while (i < want.length && open[i] && open[i].dataset.iri === want[i]) i++;
+  if (i < want.length) {
+    detail.querySelectorAll('.pane:not([data-iri])').forEach(p => p.remove());
+    open.slice(i).forEach(p => p.remove());
+    for (const iri of want.slice(i)) {
+      const p = newPane(iri);
+      detail.append(p);
+      ready.then(() => loadDetail(iri, p)).then(renderNav, fail);
+    }
+  }
+  show(n ?? (want.length ? want.length + 1 : 0), instant);
+}
+
+document.getElementById('back').addEventListener('click', () => {
+  if (history.state && history.state.up) { slideBack = true; history.back(); }
+  else goTo(atPage - 1);
 });
+addEventListener('popstate', e => {
+  if (!phone.matches) return;
+  restore(new URLSearchParams(location.search).getAll('open'),
+          e.state && e.state.opsis ? e.state.at : null, !slideBack);
+  slideBack = false;
+});
+document.addEventListener('click', e => {
+  if (!phone.matches) return;
+  if (e.target.closest('[data-clear]')) { renderNav(); return; }
+  const f = e.target.closest('.facet');
+  if ((f && !e.target.closest('button.pin') && state[f.dataset.key] === f.dataset.v)
+      || e.target.closest('[data-cls]')) goTo(1);
+});
+const qEl = document.getElementById('q');
+qEl.addEventListener('input', () => { if (phone.matches && atPage !== 1 && qEl.value.trim()) goTo(1); });
+qEl.addEventListener('keydown', e => { if (phone.matches && e.key === 'Enter') qEl.blur(); });
+phone.addEventListener('change', () => {
+  if (phone.matches) {
+    setStacked(stacked);
+    show(panes().length ? panes().length + 1 : state.cls || state.graph || state.text ? 1 : 0, true);
+    history.replaceState({opsis: true, at: atPage, up: false}, '', phoneHref());
+    return;
+  }
+  panes().slice(Math.max(0, atPage - 1)).forEach(p => p.remove());
+  pages().forEach(p => { p.inert = false; });
+  nav.hidden = true;
+  mainEl.style.removeProperty('--at');
+  setStacked(stacked);
+});
+
+const reopen = new URLSearchParams(location.search).getAll('open');
+const landing = history.state;
+setStacked(stacked);
+const started = refresh();
+if (phone.matches) {
+  restore(reopen, null, true, started);
+  history.replaceState({opsis: true, at: atPage,
+    up: !!(landing && landing.up && landing.at === atPage)}, '', phoneHref());
+  started.then(() => {
+    if (atPage >= firstPage()) return;
+    show(firstPage(), true);
+    history.replaceState({opsis: true, at: atPage, up: false}, '', phoneHref());
+  });
+} else {
+  started.then(() => {
+    let from = null;
+    for (const iri of stacked ? reopen : reopen.slice(-1)) {
+      openEntity(iri, from);
+      from = panes().at(-1);
+    }
+  });
+}
 </script>
 </body>
 </html>

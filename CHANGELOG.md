@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opsis on mobile
+
 ### Fixed
 
 - On a link with `?graphs=`, selecting a class or a graph no longer overloads
