@@ -21,7 +21,7 @@ index.html?endpoint=http://localhost:7878/query
 
 Here is also a [live demo](https://kvistgaard.github.io/opsis/?endpoint=https://data.nobelprize.org/store/sparql) on the Nobel Prize linked data.
 
-Another [live demo](https://kvistgaard.github.io/opsis/?endpoint=https://cordis.europa.eu/datalab/sparql&graphs=http://data.europa.eu/s66/graph/projects%20http://data.europa.eu/s66/graph/organisations%20http://data.europa.eu/s66/graph/fundingschemes%20http://data.europa.eu/s66/graph/euroscivoc) browses the linked data that CORDIS publishes on EU research projects, limited to four of its graphs: projects, organisations, funding schemes and the EuroSciVoc vocabulary of research fields.
+Another [live demo](https://kvistgaard.github.io/opsis/?endpoint=https://cordis.europa.eu/datalab/sparql&graphs=http://data.europa.eu/s66/graph/projects%20http://data.europa.eu/s66/graph/organisations%20http://data.europa.eu/s66/graph/fundingschemes%20http://data.europa.eu/s66/graph/euroscivoc&dates=off) browses the linked data that CORDIS publishes on EU research projects, limited to four of its graphs: projects, organisations, funding schemes and the EuroSciVoc vocabulary of research fields.
 ## One file, all SPARQL
 
 Opsis is under 1.5K lines of HTML, CSS, and JavaScript. It has no build step, no libraries, and no server. The page sends SPARQL queries directly to the endpoint in response to user actions.

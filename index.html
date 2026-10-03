@@ -462,15 +462,19 @@ async function sparql(query) {
   return (await r.json()).results.bindings;
 }
 
-function filters(except) {
+function filters(except, bound = false) {
   const out = [];
   if (state.cls && except !== 'cls') {
     out.push(GIVEN_GRAPHS.length
       ? `?leaf rdfs:subClassOf* <${state.cls}> .\n  ${inGiven('gType', '?s a ?leaf')}`
       : `?s a/rdfs:subClassOf* <${state.cls}> .`);
   }
-  if (state.graph && except !== 'graph') out.push(`GRAPH <${state.graph}> { ?s ?anyP ?anyO }`);
   const t = textClause();
+  if (state.graph && except !== 'graph') {
+    const exists = GIVEN_GRAPHS.length && (bound || out.length + (t ? 1 : 0) > 0);
+    out.push(exists ? `FILTER EXISTS { GRAPH <${state.graph}> { ?s ?anyP ?anyO } }`
+                   : `GRAPH <${state.graph}> { ?s ?anyP ?anyO }`);
+  }
   if (t) out.push(t);
   return out.join('\n  ');
 }
@@ -501,10 +505,13 @@ async function loadFacets(current) {
     return rows;
   };
   const typed = GIVEN_GRAPHS.length ? inGiven('gType', '?s a ?leaf') : '?s a ?leaf .';
+  const graphMembership = otherFilters => GIVEN_GRAPHS.length && otherFilters
+    ? `${GRAPH_VALUES}FILTER EXISTS { GRAPH ?g { ?s ?gp ?go } }`
+    : `${GRAPH_VALUES}GRAPH ?g { ?s ?gp ?go }`;
   const [classes, graphs, pinRows] = await Promise.all([
     !shown('cls') ? [] : sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
       { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
-          ${filters('cls')}
+          ${filters('cls', true)}
           ${typed}
           ?leaf rdfs:subClassOf* ?c .
           FILTER(isIRI(?c) && isIRI(?s))
@@ -514,7 +521,7 @@ async function loadFacets(current) {
     !shown('graph') ? [] : sparql(`${PREFIX}SELECT ?g ?n (SAMPLE(?t) AS ?title) WHERE {
       { SELECT ?g (COUNT(DISTINCT ?s) AS ?n) WHERE {
           ${filters('graph')}
-          ${GRAPH_VALUES}GRAPH ?g { ?s ?gp ?go }
+          ${graphMembership(filters('graph'))}
           FILTER(isIRI(?s))
         } GROUP BY ?g }
       OPTIONAL { ?g <http://purl.org/dc/terms/title> ?t }
@@ -523,7 +530,7 @@ async function loadFacets(current) {
       VALUES ?c { ${pins.map(c => `<${c}>`).join(' ')} }
       OPTIONAL { { SELECT ?c (COUNT(DISTINCT ?s) AS ?n) WHERE {
           VALUES ?c { ${pins.map(c => `<${c}>`).join(' ')} }
-          ${filters('cls')}
+          ${filters('cls', true)}
           ${typed}
           ?leaf rdfs:subClassOf* ?c .
           FILTER(isIRI(?s))
