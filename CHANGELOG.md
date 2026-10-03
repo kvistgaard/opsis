@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Opsis on mobile
 
+### Changed
+
+- **copy as VoID** is now a copy icon beside the status line
+
 ### Fixed
 
 - On a link with `?graphs=`, selecting a class or a graph no longer overloads

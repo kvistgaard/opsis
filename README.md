@@ -62,7 +62,7 @@ index.html?endpoint=https://cordis.europa.eu/datalab/sparql&graphs=http://data.e
 
 Every count, list and entity pane then reads only those graphs. It stays fast as long as the graphs you give are small, however large the store. 
 
-**copy as VoID** in the header copies the graphs as a VoID description.
+To copy the graphs as a VoID description, click the copy icon beside the status line.
 
 #### Opsis with Sparqlaske
 

@@ -113,10 +113,11 @@
   code { font:12px/1.4 ui-monospace,Consolas,monospace; word-break:break-all; }
   button.clear { border:0; background:none; color:var(--accent); cursor:pointer;
                  font-size:12px; padding:0; text-transform:none; letter-spacing:normal; }
-  #catlink, #voidcopy { font-size:12px; border:0; background:none; color:var(--accent);
+  #catlink { font-size:12px; border:0; background:none; color:var(--accent);
              cursor:pointer; padding:0; text-transform:none; letter-spacing:normal;
              font-family:inherit; }
-  #catlink:hover, #voidcopy:hover { text-decoration:underline; }
+  #catlink:hover { text-decoration:underline; }
+  #voidcopy { margin-left:-10px; }
   .kv .k { color:var(--muted); font-size:12px; margin-right:3px; }
   .sep { color:var(--muted); }
   a.lst { font-size:11px; margin-left:4px; padding:0 4px; border:1px solid var(--line);
@@ -165,15 +166,20 @@
     #q { order:1; flex:1; min-width:0; margin-left:0; font-size:16px; }
     #gh-link { order:2; }
     #status { order:4; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    #ep, #catlink, #voidcopy { order:5; }
-    #panes { display:none; }
+    #ep, #catlink { order:5; }
+    #panes, #voidcopy { display:none; }
+    body { font-size:15px; }
+    h2, .facet .ns, a.lst, a.ext, a.app { font-size:12px; }
+    #status, .facet .n, .row .t, .t, .row .d, .kv .k, button.clear, #catlink, #ep, code { font-size:13px; }
+    .ehead { font-size:17px; }
+    button.copy svg, button.pin svg { width:13px; height:13px; }
     #nav:not([hidden]) { display:flex; align-items:center; gap:8px; padding:0 12px 0 4px;
                          border-bottom:1px solid var(--line); }
-    #back { border:0; background:none; color:var(--accent); font:inherit; font-size:15px;
+    #back { border:0; background:none; color:var(--accent); font:inherit; font-size:16px;
             padding:10px 8px; cursor:pointer; min-width:0; white-space:nowrap;
             overflow:hidden; text-overflow:ellipsis; }
     #scope { display:flex; gap:6px; margin-left:auto; min-width:0; }
-    .chip { font:inherit; font-size:12px; border:0; border-radius:4px; padding:4px 8px;
+    .chip { font:inherit; font-size:13px; border:0; border-radius:4px; padding:4px 8px;
             background:var(--accent); color:var(--on-accent); cursor:pointer; min-width:0;
             white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     main { display:flex; overflow:hidden; overflow:clip; }
@@ -187,13 +193,16 @@
     #detail > .pane:not([data-iri]) { display:none; }
     .facet { padding:9px 8px; }
     .row { padding:8px 6px; }
+    .row .t { display:flex; align-items:center; }
+    .row .t code { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .row .t > :not(code) { flex:none; }
     button.pin { opacity:.35; padding:6px; margin:-6px; }
     .facet.pinned button.pin { opacity:.6; }
     button.copy { padding:6px; margin-top:-6px; margin-bottom:-6px; }
     a.ext { padding:6px 4px; }
     #detail table, #detail tbody, #detail tr, #detail td { display:block; width:auto; }
     #detail td.p { white-space:normal; border-bottom:0; padding:7px 6px 0;
-                   color:var(--muted); font-size:12px; }
+                   color:var(--muted); font-size:13px; }
     #detail td.p + td { padding:1px 6px 7px; }
     @media (prefers-reduced-motion: reduce) {
       #facets, #results, #detail > .pane { transition:none; }
@@ -211,10 +220,11 @@
   <path fill="currentColor" d="M102.2 102V34H92.8V102ZM140.5 57Q140.5 49.4 137.4 44Q134.3 38.6 129.2 35.8Q124.1 32.9 117.9 32.9Q112.1 32.9 107.8 35.8Q103.4 38.7 101 44.1Q98.6 49.5 98.6 57Q98.6 64.4 101 69.8Q103.4 75.3 107.8 78.2Q112.1 81.1 117.9 81.1Q124.1 81.1 129.2 78.2Q134.3 75.4 137.4 69.9Q140.5 64.5 140.5 57ZM130.8 57Q130.8 62 128.8 65.4Q126.8 68.9 123.5 70.7Q120.1 72.4 116.1 72.4Q112.8 72.4 109.6 70.7Q106.3 68.9 104.3 65.4Q102.2 62 102.2 57Q102.2 52 104.3 48.6Q106.3 45.1 109.6 43.3Q112.8 41.6 116.1 41.6Q120.1 41.6 123.5 43.3Q126.8 45.1 128.8 48.6Q130.8 52 130.8 57Z M153.1 65.4 146.8 70.5Q148.5 73.1 151.2 75.6Q154 78.1 157.8 79.6Q161.6 81.2 166.3 81.2Q173.6 81.2 178 77.2Q182.4 73.3 182.4 67Q182.4 62.9 180.5 60.3Q178.5 57.7 175.3 55.8Q172 54 168.1 52.5Q165.5 51.4 163.3 50.4Q161.1 49.3 159.7 48Q158.3 46.7 158.3 44.9Q158.3 42.8 160 41.8Q161.6 40.8 164 40.8Q167.5 40.8 170.6 42.5Q173.6 44.2 175.7 46.8L181.9 41.6Q180.2 39.1 177.6 37.2Q175 35.3 171.7 34.1Q168.4 33 164.6 33Q160.7 33 157.2 34.3Q153.6 35.7 151.4 38.4Q149.3 41.2 149.3 45.3Q149.3 49.4 151.3 52Q153.3 54.7 156.4 56.4Q159.4 58 162.4 59.2Q165.3 60.2 167.7 61.4Q170 62.5 171.5 64Q172.9 65.5 172.9 67.8Q172.9 70.2 171.1 71.7Q169.3 73.1 166.1 73.1Q163.6 73.1 161.3 72.1Q158.9 71.2 156.9 69.4Q154.9 67.6 153.1 65.4Z M192.3 15.3Q192.3 17.8 194.1 19.6Q196 21.4 198.5 21.4Q201 21.4 202.8 19.6Q204.6 17.8 204.6 15.3Q204.6 12.8 202.8 11Q201 9.3 198.5 9.3Q196 9.3 194.1 11Q192.3 12.8 192.3 15.3ZM193.8 34V80H203.1V34Z M220.8 65.4 214.5 70.5Q216.2 73.1 218.9 75.6Q221.7 78.1 225.5 79.6Q229.3 81.2 234 81.2Q241.3 81.2 245.7 77.2Q250.1 73.3 250.1 67Q250.1 62.9 248.2 60.3Q246.2 57.7 243 55.8Q239.7 54 235.8 52.5Q233.2 51.4 231 50.4Q228.8 49.3 227.4 48Q226 46.7 226 44.9Q226 42.8 227.7 41.8Q229.3 40.8 231.7 40.8Q235.2 40.8 238.3 42.5Q241.3 44.2 243.4 46.8L249.6 41.6Q247.9 39.1 245.3 37.2Q242.7 35.3 239.4 34.1Q236.1 33 232.3 33Q228.4 33 224.9 34.3Q221.3 35.7 219.1 38.4Q217 41.2 217 45.3Q217 49.4 219 52Q221 54.7 224.1 56.4Q227.1 58 230.1 59.2Q233 60.2 235.4 61.4Q237.7 62.5 239.2 64Q240.6 65.5 240.6 67.8Q240.6 70.2 238.8 71.7Q237 73.1 233.8 73.1Q231.3 73.1 229 72.1Q226.6 71.2 224.6 69.4Q222.6 67.6 220.8 65.4Z"/>
 </svg></h1>
   <span id="status">connecting…</span>
+  <button id="voidcopy" class="copy" title="Copy this link's graphs as a VoID description, for a data catalogue"
+          aria-label="Copy the graphs as VoID" hidden><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="5.5" width="8.5" height="8.5" rx="1.5"/><path d="M10.5 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5"/></svg></button>
   <select id="ep" title="Which SPARQL endpoint to read through" hidden></select>
   <button id="panes" title="Stacked panes: open each entity beside the one it was opened from" aria-pressed="false">stack</button>
   <button id="catlink" title="The data catalogue: every dataset, its files, graphs and record counts" hidden>catalogue</button>
-  <button id="voidcopy" title="Copy the graphs this link is scoped to as a VoID description" hidden>copy as VoID</button>
   <input id="q" placeholder="search…" autocomplete="off" enterkeyhint="search"
          title="Searches every string value an entity carries, not only labels">
   <a id="gh-link" href="https://github.com/kvistgaard/opsis" target="_blank" rel="noopener noreferrer"
@@ -978,7 +988,7 @@ document.addEventListener('click', e => {
   if (e.target.closest('a.ext, a.app, a.opens')) return;
   const copy = e.target.closest('button.copy');
   if (copy) {
-    copyText(copy.dataset.copy).then(() => {
+    copyText(copy.id === 'voidcopy' ? scopeVoid() : copy.dataset.copy).then(() => {
       copy.classList.add('done');
       copy.textContent = '✓';
       setTimeout(() => { copy.classList.remove('done'); copy.innerHTML = COPY_ICON; }, 1200);
@@ -1018,14 +1028,6 @@ document.addEventListener('click', e => {
   if (pin) { togglePin(pin.dataset.pin); return; }
   if (e.target.id === 'pinreset') { resetPins(); renderFacets(); return; }
   if (e.target.id === 'allcls') { allClasses = true; loadFacets(take('facets')).catch(fail); return; }
-  if (e.target.id === 'voidcopy') {
-    const b = e.target;
-    copyText(scopeVoid()).then(() => {
-      b.textContent = 'copied';
-      setTimeout(() => { b.textContent = 'copy as VoID'; }, 1200);
-    });
-    return;
-  }
   if (e.target.id === 'pincopy') {
     const b = e.target;
     copyText(pinsTurtle()).then(() => {
