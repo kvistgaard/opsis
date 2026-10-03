@@ -1,8 +1,4 @@
 <!doctype html>
-<!-- Opsis 0.1.0: a faceted browser for any SPARQL 1.1 endpoint. One file, no
-     build, no dependencies, read-only. MIT licence, see LICENSE. See README.md
-     beside it for the panes, the two search paths, the date column, the open
-     rules and every cap below. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -63,16 +59,11 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--sb); border-radius: 5px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--sb-hover); }
-  /* The panes take whatever height the header leaves, so the page itself
-     never scrolls. */
   body { margin:0; background:var(--bg); color:var(--ink);
          display:flex; flex-direction:column; height:100vh;
          font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
   header { padding:14px 18px; border-bottom:1px solid var(--line);
            display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; }
-  /* The wordmark is the mark doing duty as the O, with psis outlined to a
-     path so the header needs no webfont. Its baseline sits 34 of 114 units
-     above the box, which is what vertical-align puts back on the line. */
   h1 { margin:0; font-size:15px; line-height:1; }
   h1 .logo { display:inline-block; height:18px; width:auto; vertical-align:-5.4px; }
   #status { color:var(--muted); font-size:12px; }
@@ -80,13 +71,10 @@
        border-radius:6px; background:var(--panel); color:var(--ink); min-width:220px; }
   main { display:grid; grid-template-columns:auto 1fr 1.2fr; gap:0; flex:1; min-height:0; }
   section { overflow:auto; padding:12px 14px; border-right:1px solid var(--line); }
-  /* Drag the bottom-right corner of the first column to widen it. */
   #facets { width:280px; min-width:170px; max-width:60vw; resize:horizontal; }
   h2 { font-size:11px; text-transform:uppercase; letter-spacing:.08em;
        color:var(--muted); margin:14px 0 6px; font-weight:600; }
   h2:first-child { margin-top:0; }
-  /* The Entities heading is the result table's header row: the date control
-     sits above the date column, at the same inset as a row's own padding. */
   #results h2 { display:flex; justify-content:space-between; align-items:baseline;
                 gap:10px; padding:0 6px; }
   .facet { display:flex; justify-content:space-between; gap:8px; padding:4px 6px;
@@ -97,9 +85,6 @@
   .facet.on .n { color:var(--on-accent); opacity:.8; }
   .facet .ns { color:var(--muted); font-size:11px; margin-left:5px; }
   .facet.on .ns { color:var(--on-accent); opacity:.75; }
-  /* Pinned classes head the Class list, in the viewer's order, above a rule
-     that carries the way back to the store's pins. The pin shows on hover, and
-     stays faint on the pinned. */
   .facet .r { display:flex; gap:6px; align-items:baseline; }
   button.pin { border:0; background:none; padding:0; cursor:pointer; color:inherit;
                opacity:0; line-height:1; align-self:center; }
@@ -132,37 +117,21 @@
              cursor:pointer; padding:0; text-transform:none; letter-spacing:normal;
              font-family:inherit; }
   #catlink:hover, #voidcopy:hover { text-decoration:underline; }
-  /* A blank-node value (a class partition, say) is shown inline as its own
-     facts, since it has no page of its own to open. */
   .kv .k { color:var(--muted); font-size:12px; margin-right:3px; }
   .sep { color:var(--muted); }
   a.lst { font-size:11px; margin-left:4px; padding:0 4px; border:1px solid var(--line);
           border-radius:3px; text-decoration:none; }
-  /* Follow the IRI itself, where it resolves. Muted until hovered, so a list
-     of them does not read as a row of arrows. */
   a.ext { color:var(--muted); text-decoration:none; font-size:11px; }
   a.ext:hover { color:var(--accent); }
-  /* Copy the full IRI, whatever prefix the page shortened it to. */
   button.copy { border:0; background:none; padding:0 2px; margin-left:3px; cursor:pointer;
                 color:var(--muted); font-size:11px; line-height:1; vertical-align:-1px; }
   button.copy:hover, button.copy.done { color:var(--accent); }
-  /* Hand the resource to an application, per the settings' dereference rules.
-     Named rather than an arrow, because which application it goes to is the
-     thing worth seeing before clicking. */
   a.app { color:var(--muted); text-decoration:none; font-size:11px; margin-left:4px;
           padding:0 4px; border:1px solid var(--line); border-radius:3px; }
   a.app:hover { color:var(--accent); border-color:var(--accent); }
-  /* A value whose rule hands it to an application: the value is the link. */
   a.opens { color:var(--accent); text-decoration:none; }
   a.opens:hover { text-decoration:underline; }
-  /* Only shown once the store names more than the one service it was reached
-     through, so the ordinary single-endpoint case keeps an uncluttered header. */
-  /* Stacked panes, after Andy Matuschak's notes: each entity opens in a pane
-     of fixed width beside the one it was opened from, and panes scrolled past
-     stay at the left edge as narrow spines. Off, the strip dissolves into the
-     ordinary three columns. */
   #strip, #detail.stack { display:contents; }
-  /* The repository, at the far right of the header, as in nodica. */
   #gh-link { display:flex; align-self:center; color:var(--ink); opacity:.7; }
   #gh-link:hover { opacity:1; }
   #panes { font:inherit; font-size:12px; border:1px solid var(--line); border-radius:3px;
@@ -179,8 +148,6 @@
   .spine { display:none; }
   body.stacked .pane.covered > .body,
   body.stacked #results.covered > * { visibility:hidden; }
-  /* A covered pane stops scrolling, and its spine sits at the scroll offset it
-     was covered at (--st), so a pane read halfway down keeps its spine in view. */
   body.stacked .pane.covered, body.stacked #results.covered { overflow:hidden; }
   body.stacked .pane.covered > .spine, body.stacked #results.covered::before {
     display:block; position:absolute; top:var(--st, 0px); left:0; height:100%; width:var(--spine);
@@ -224,11 +191,6 @@
   </div>
 </main>
 <script>
-// Which endpoint to read through. The URL wins, so a link can always pin one;
-// otherwise the last choice made in the picker, remembered per browser; failing
-// both, the local store. The page cannot ask the graph where the graph is, so
-// this one setting has to bootstrap outside it - unlike the open rules, which
-// the endpoint itself serves once there is an endpoint to ask.
 const REMEMBERED = 'opsis-endpoint';
 const remember = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 const recall = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -237,71 +199,28 @@ const ENDPOINT = new URLSearchParams(location.search).get('endpoint')
   || recall(REMEMBERED)
   || 'http://localhost:7878/query';
 const PAGE = 200;
-const FACT_CAP = 300;    // facts shown for one entity
-const LINK_CAP = 200;    // incoming links shown
+const FACT_CAP = 300;
+const LINK_CAP = 200;
 const state = {cls: null, graph: null, text: '', offset: 0, sort: null};
-// The catalogue node and the authority both come from the store: whichever
-// dcat:Catalog it holds, and that node's own origin. A store with no catalogue
-// hides the button and treats every http(s) IRI as followable. Hard-coding
-// either would have made this page one graph's page.
 let CATALOGUE = null;
 let AUTHORITY = null;
 
-// An entity's date is its earliest xsd:date/xsd:dateTime value, whatever
-// property carries it (dcterms:issued, schema:startDate, anything else) -
-// generic, no vocabulary list to maintain.
 const DATE_FILTER = `FILTER(datatype(?d) = <http://www.w3.org/2001/XMLSchema#date>
                   || datatype(?d) = <http://www.w3.org/2001/XMLSchema#dateTime>)`;
 
-// The endpoint's search sidecar, when it has one: ranked results in
-// milliseconds, labels first. The contract: GET /search?q=<text>&limit=<n> on
-// the endpoint's origin, answering {total, results: [{iri, label}]}. Detected once; without it, search falls back to
-// a SPARQL CONTAINS over every literal - slower, and unranked.
-let searchApi = null;        // URL or false once probed
-let searchHits = null;       // sidecar results for the current search term
+let searchApi = null;
+let searchHits = null;
 let searchTotal = 0;
 
-// `?search=sparql` forces the CONTAINS path. Without it the fallback is
-// unreachable wherever the sidecar answers, so nothing would ever exercise the
-// fallback, and the two could not be compared against one store.
 const FORCE_SPARQL =
   new URLSearchParams(location.search).get('search') === 'sparql';
 
-// A list of named graphs to treat as the whole dataset, given directly in
-// the URL rather than discovered from the store: a public, read-only store
-// cannot be told to describe its own subsets, since it takes no writes, and
-// may be too large to scan for its classes or to enumerate its graphs from.
-// Every count and list then runs only inside these graphs, which the engine
-// answers from their own indexes instead of the whole store. This is the
-// flat form of a void:Dataset's void:subset -> sd:NamedGraph -> sd:name
-// list; giving it as one parameter keeps the whole setting in one link, to
-// share or to publish, on GitHub Pages or anywhere else. The IRIs are
-// separated by spaces, as in the reactodia fork's sparql-graph parameter:
-// an IRI may hold a comma, never a space. An entry that is not a clean
-// absolute IRI is dropped rather than spliced into a query - the same guard
-// attachDates uses on IRIs from the store.
-// The scope is written into each query rather than sent as the protocol's
-// default-graph-uri, which the reactodia fork uses: the PKG's server and
-// the Nobel Prize data's EntryStore both ignore that parameter without a
-// word and answer for the whole store (2026-10-02).
-// `?dates=off` leaves out the date column and the date sort. Every page of
-// the list asks the store for its entities' dates; on a large store that is
-// most of a click's time (about 1 s of a search on Wikidata through QLever,
-// 2026-10-02), and dates matter for a personal knowledge graph, seldom at
-// scale. Absent, the page asks for dates as it always has.
 const NO_DATES = new URLSearchParams(location.search).get('dates') === 'off';
 
 const GIVEN_GRAPHS = (new URLSearchParams(location.search).get('graphs') || '')
   .split(/\s+/).filter(g => /^[a-z][a-z0-9+.-]*:/i.test(g) && !/[\s<>"{}|^`\\]/.test(g));
 const graphList = GIVEN_GRAPHS.map(g => `<${g}>`).join(' ');
-// A pattern scoped to the given graphs, under a graph variable of its own.
-// Patterns in one query never share it: a shared variable would make the
-// type assertion, a search match and a date all come from the same graph,
-// though an entity may state its type in one graph and its name in another.
 const inGiven = (v, pattern) => `VALUES ?${v} { ${graphList} }\n  GRAPH ?${v} { ${pattern} }`;
-// The same for a query whose own ?g is the graph it reads or counts by;
-// empty when none were given, so such a query reads exactly as it did
-// before this setting existed.
 const GRAPH_VALUES = GIVEN_GRAPHS.length ? `VALUES ?g { ${graphList} }\n  ` : '';
 document.getElementById('voidcopy').hidden = !GIVEN_GRAPHS.length;
 
@@ -311,8 +230,6 @@ async function probeSearchApi() {
   try {
     const u = new URL(ENDPOINT);
     const candidate = `${u.origin}/search`;
-    // A website may answer /search with its own HTML page, as
-    // data.nobelprize.org does, so only the sidecar's JSON shape counts.
     const r = await fetch(`${candidate}?q=&limit=1`);
     const j = r.ok ? await r.json() : null;
     searchApi = j && Array.isArray(j.results) && typeof j.total === 'number' ? candidate : false;
@@ -321,9 +238,6 @@ async function probeSearchApi() {
 
 const SEARCH_CAP = 2000;
 
-// Every load takes a ticket, and only the latest ticket of its kind may write
-// to the page. Without it a slow answer for "coh" could land after the answer
-// for "cohesion" and replace it.
 const turns = {};
 const take = kind => {
   const n = turns[kind] = (turns[kind] || 0) + 1;
@@ -333,7 +247,6 @@ const fail = e => {
   document.getElementById('status').textContent = `endpoint error: ${e.message}`;
 };
 
-// Returns false when a newer search has started, so the caller drops its hits.
 async function ensureSearch() {
   if (!state.text || searchApi === false) { searchHits = null; searchTotal = 0; return true; }
   const text = state.text;
@@ -351,17 +264,11 @@ function textClause() {
   if (!state.text) return '';
   if (searchHits) return `VALUES ?s { ${searchHits.map(h => `<${h.iri}>`).join(' ')} }`;
   const t = state.text.replace(/["\\]/g, '\\$&');
-  // Unscoped, this scans every literal of the store; a given graph list
-  // keeps the scan inside it, as every other query here does.
   return GIVEN_GRAPHS.length
     ? `${inGiven('gText', '?s ?sfP ?sfV')} FILTER(isLiteral(?sfV) && CONTAINS(LCASE(STR(?sfV)), LCASE("${t}")))`
     : `?s ?sfP ?sfV . FILTER(isLiteral(?sfV) && CONTAINS(LCASE(STR(?sfV)), LCASE("${t}")))`;
 }
 
-// Display prefixes. Vocabularies that declare their own prefix are read from
-// the endpoint at load (loadPrefixes), and the catalogue's authority gets the
-// empty prefix (loadCatalogue); these are the standard namespaces data rarely
-// declares.
 const PREFIXES = {
   'http://www.w3.org/1999/02/22-rdf-syntax-ns#': 'rdf:',
   'http://www.w3.org/2000/01/rdf-schema#': 'rdfs:',
@@ -379,9 +286,17 @@ const PREFIXES = {
   'http://xmlns.com/foaf/0.1/': 'foaf:',
   'http://www.w3.org/ns/adms#': 'adms:',
   'http://purl.org/dc/dcmitype/': 'dcmitype:',
+  'http://www.w3.org/2006/vcard/ns#': 'vcard:',
+  'http://dbpedia.org/ontology/': 'dbo:',
+  'http://dbpedia.org/resource/': 'dbr:',
+  'http://dbpedia.org/property/': 'dbp:',
+  'http://data.nobelprize.org/terms/': 'nobel:',
+  'http://schema.org/': 'schema:',
+  'http://www.wikidata.org/entity/': 'wd:',
+  'http://www.wikidata.org/prop/direct/': 'wdt:',
+  'http://data.europa.eu/s66#': 'eurio:',
+  'http://www.w3.org/2008/05/skos-xl#': 'skosxl:',
 };
-// Longest namespace first, so a vocabulary under the authority reads as its
-// own prefix rather than as a path under the authority's empty one.
 let PREFIX_ORDER = [];
 const orderPrefixes = () =>
   PREFIX_ORDER = Object.entries(PREFIXES).sort((a, b) => b[0].length - a[0].length);
@@ -394,16 +309,6 @@ const short = u => {
   return s;
 };
 
-// Every ontology in the store declares its prefix (vann, or sh:declare in a
-// shapes document), so the map comes from the data rather than from a list
-// kept in step by hand. Failure is not fatal: the built-in map still reads.
-// Settings load once per page, but only an attempt that actually reached the
-// endpoint counts. A launcher may start the endpoint and open the page in the
-// same breath, so the first query can land before the store is up: latching the
-// flag on the attempt rather than on the result left the page connected and
-// ruleless for the rest of the session - facets and search worked, and the
-// application links were simply never there. A failed attempt is retried on the
-// next refresh; one already in flight is shared rather than repeated.
 let settingsLoaded = false, settingsInFlight = null;
 function loadSettings() {
   if (settingsLoaded) return Promise.resolve();
@@ -415,27 +320,9 @@ function loadSettings() {
   }
   return settingsInFlight;
 }
-// Whether the store keeps any triples in named graphs. The entity pane reads
-// each fact with the graph it sits in, and on a store with none, such as
-// QLever's Wikidata, every pane came back empty. The Graph section's first
-// answer tells, since it lists every named graph and an empty list means none,
-// so the page asks the store nothing extra. Until that answer comes, the page
-// assumes named graphs, as it always has. If it never comes, as when QLever's
-// Wikidata took a minute over it (2026-09-29), an entity pane that finds
-// nothing asks the store once, and asks again outside any graph if it has none.
 let namedGraphs = true;
 let graphsKnown = false;
-// A given graph list already answers both questions this flag pair tracks:
-// yes, the store has named graphs, and they are exactly these.
 if (GIVEN_GRAPHS.length) { namedGraphs = true; graphsKnown = true; }
-// The endpoints on offer are the ones the catalogue already describes: DCAT's
-// own dcat:DataService and dcat:endpointURL. No term of our own, because a query service is exactly what DCAT is for - and because a
-// second endpoint then advertises itself to this page merely by describing
-// itself the way any catalogue would. The picker stays hidden while the store
-// names only the endpoint the page is already reading through.
-// The catalogue the store describes, if it describes one, and the origin it
-// was minted under. Both are data, so pointing this page at someone else's
-// graph needs no edit to it.
 async function loadCatalogue() {
   const btn = document.getElementById('catlink');
   try {
@@ -450,17 +337,7 @@ async function loadCatalogue() {
   } catch (e) { btn.hidden = true; return false; }
 }
 
-// Pinned classes head the Class list. The store may name a default for every
-// viewer, as the RDF list cfg:pinnedClasses on its cfg:Configuration. A
-// viewer's own pins live in this browser, one list per endpoint, and replace
-// the store's list rather than adding to it, so unpinning a default needs no
-// record of its own. The page never writes to the store: "copy as Turtle"
-// hands the list over for the settings graph, and once the store serves the
-// same list the browser's copy is dropped, so later edits to the store reach
-// this viewer again.
 const PINS = `opsis-pins ${ENDPOINT}`;
-// Pins are written into queries between angle brackets, and the browser's
-// copy is not the store's data, so anything that could close the IRI is refused.
 const iriSafe = s => typeof s === 'string' && /^[a-z][a-z0-9+.-]*:[^\s<>"{}|^`\\]*$/i.test(s);
 let storePins = [], ownPins = null, storeConfig = null;
 try {
@@ -472,8 +349,6 @@ const samePins = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]
 function setPins(list) { ownPins = list; remember(PINS, JSON.stringify(list)); }
 function resetPins() { ownPins = null; forget(PINS); }
 
-// An RDF list's order is the number of cells before each member. Two lists
-// in the store would interleave, so only the first is read.
 async function loadPins() {
   try {
     const rows = await sparql(`PREFIX cfg: <https://kvistgaard.github.io/config#>
@@ -493,13 +368,6 @@ async function loadPins() {
     return true;
   } catch (e) { return false; }
 }
-// The browser's pins as Turtle, ready for the settings graph. A store with a
-// named configuration gets the triple on that node; one without gets a new
-// configuration of its own.
-// The scope of this link as VoID: the store as a dataset at its endpoint,
-// each given graph a subset of it. The link stays the setting, since the
-// store takes no writes; this is the same scope in the vocabulary a
-// catalogue would hold it in.
 function scopeVoid() {
   const subsets = GIVEN_GRAPHS
     .map(g => `    [ a void:Dataset, sd:NamedGraph ; sd:name <${g}> ]`).join(' ,\n');
@@ -556,35 +424,32 @@ async function loadPrefixes() {
     }
     orderPrefixes();
     return true;
-  } catch (e) { return false; /* the built-in map still reads */ }
+  } catch (e) { return false;  }
 }
 const localName = u => {
   const s = String(u);
   const cut = Math.max(s.lastIndexOf('#'), s.lastIndexOf('/'));
   return (cut >= 0 ? s.slice(cut + 1) : s) || s;
 };
-// The namespace part of a shortened IRI: which vocabulary a facet belongs to,
-// and what tells apart two facets sharing a label (owl:Class and rdfs:Class
-// are both labelled "Class"). A namespace that declares no prefix falls back
-// to the last segment of its IRI, and the authority's own to its host name;
-// the full IRI is always in the hover.
+const GENERIC = new Set(['ns', 'ontology', 'ontologies', 'terms', 'term', 'vocab', 'vocabulary',
+  'schema', 'schemas', 'def', 'core', 'resource', 'resources', 'property', 'properties', 'class',
+  'classes', 'owl', 'rdf', 'voc', 'model', 'id', 'entity']);
 const nsHint = u => {
   const s = short(u);
   const local = localName(u);
   const ns = s.slice(0, s.length - local.length).replace(/[#/:]+$/, '')
               .replace(/^https?:\/\//, '');
   if (!ns) return AUTHORITY ? new URL(AUTHORITY).hostname.replace(/^www\./, '') : '';
-  return ns.includes('/') ? ns.split('/').filter(Boolean).pop() : ns;
+  if (!ns.includes('/')) return ns;
+  const [host, ...path] = ns.split('/').filter(Boolean);
+  const named = path.filter(p => !GENERIC.has(p.toLowerCase()) && !/^[\d.v-]+$/i.test(p));
+  if (named.length) return named.pop();
+  const labels = host.split('.').slice(0, -1).filter(l => !['www', 'data', 'id', 'vocab', 'lod'].includes(l));
+  return labels.length ? labels.pop() : host;
 };
 const esc = s => String(s).replace(/[&<>"]/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-// Queries go as a form field, the SPARQL protocol's most widely accepted POST.
-// Some public endpoints refuse a bare application/sparql-query body, and a
-// form post also needs no CORS preflight.
-// An endpoint that stops a query at its time limit may still answer, with 206
-// and whatever it had so far (Virtuoso does). The rows are kept and the status
-// line says the counts may be short, rather than passing them off as complete.
 let partial = false;
 async function sparql(query) {
   const r = await fetch(ENDPOINT, {
@@ -597,20 +462,9 @@ async function sparql(query) {
   return (await r.json()).results.bindings;
 }
 
-// Filters are built once and shared by the facet counts and the result list, so
-// a count can never promise rows the list does not then show. A facet applies
-// every filter but its own: clicking one of its values replaces that filter,
-// so the count beside the value is the length of the list the click opens.
 function filters(except) {
   const out = [];
   if (state.cls && except !== 'cls') {
-    // Unscoped, the path a/rdfs:subClassOf* resolves every step - the type
-    // assertion and every subclass hop - against the one graph it is asked
-    // in, the whole store by default. A given graph list has to scope only
-    // the type assertion, not the hierarchy above it: the classes a class
-    // list ever holds number in the thousands even on Wikidata, cheap
-    // wherever they live, but an ontology kept apart from its data, in its
-    // own graph, would go unseen if the hierarchy walk were scoped too.
     out.push(GIVEN_GRAPHS.length
       ? `?leaf rdfs:subClassOf* <${state.cls}> .\n  ${inGiven('gType', '?s a ?leaf')}`
       : `?s a/rdfs:subClassOf* <${state.cls}> .`);
@@ -623,62 +477,29 @@ function filters(except) {
 
 const PREFIX = 'PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n';
 
-// Every action on a listed entity addresses it by IRI - the detail pane, the
-// date lookup, the backlinks - so a blank node cannot be listed. The sidecar
-// skips them when it indexes; the SPARQL paths have to be told. Without this
-// the CONTAINS scan listed two blank subjects for "cohesion" and the date
-// lookup then built <b0>, which the endpoint rejects.
 const IRI_ONLY = 'FILTER(isIRI(?s))';
 const noFilter = GIVEN_GRAPHS.length ? inGiven('gType', '?s a ?anyClass') : '?s a ?anyClass .';
 const whereWith = extra => `${filters() || noFilter}\n  ${IRI_ONLY}${extra || ''}`;
 
-// Labels and titles are looked up after counting, in the outer query. Joined
-// inside the aggregate, the title lookup ran once per quad: the graph facet
-// took ten times as long that way, for the same rows. Both count IRI subjects
-// only, as the list does; counting blank nodes made a graph's facet promise
-// several times the entities its list then showed.
-// A facet earns its section by offering a choice between groups: two values
-// or more, most of them holding more than one entity. The Nobel Prize store
-// fails it for graphs: beside its data graph it keeps each record's metadata
-// in a graph of its own, 4,581 graphs of one entity each, which listed read
-// as a column of numbers. The verdict is reached once, on the unfiltered
-// store, so a section does not come and go as the user clicks, and a hidden
-// facet's query is not sent again. A selection made some other way (the
-// "list" link sets a class) still shows its section, so it can be cleared.
 const offered = {cls: null, graph: null};
 const offersChoice = rows => rows.length >= 2 &&
   rows.filter(b => Number(b.n.value) >= 2).length > rows.length / 2;
 const shown = key => offered[key] !== false || !!state[key];
 
-// The last facet answers, kept so pinning and reordering redraw at once
-// without asking the endpoint again.
 let facetRows = {classes: [], graphs: [], pins: [], more: false};
-// The Class list shows the forty largest classes until "show all" is clicked.
-// One row past the forty says whether there are more, without a count query.
 const CLASS_CAP = 40;
 let allClasses = false;
 
 async function loadFacets(current) {
-  // A pinned class keeps its place whatever its count, so pins are counted on
-  // their own: outside the top forty, and at 0 under a filter that empties them.
   const pins = pinned();
-  // The first unfiltered answer about graphs also says whether the store has
-  // any.
   const unfiltered = !state.cls && !state.graph && !state.text;
   const learnGraphs = rows => {
-    // A given graph list already settled this; an empty answer then means
-    // the list is wrong or its graphs are empty, not that the store has none.
     if (!GIVEN_GRAPHS.length && unfiltered && offered.graph === null) {
       graphsKnown = true;
       if (!rows.length) namedGraphs = false;
     }
     return rows;
   };
-  // Unscoped, ?s a ?leaf resolves against the whole store: the one query
-  // this page could never finish on Wikidata's 119.7 million typed entities.
-  // A given graph list scopes exactly this triple, as filters() does for a
-  // selected class; the hierarchy walk under it stays open, for the same
-  // reason given there.
   const typed = GIVEN_GRAPHS.length ? inGiven('gType', '?s a ?leaf') : '?s a ?leaf .';
   const [classes, graphs, pinRows] = await Promise.all([
     !shown('cls') ? [] : sparql(`${PREFIX}SELECT ?c ?n (SAMPLE(?l) AS ?label) WHERE {
@@ -723,14 +544,9 @@ async function loadFacets(current) {
 function renderFacets() {
   const {classes, graphs} = facetRows;
   const pins = pinned();
-  // A pin's count comes from its own query, or, for a class pinned since,
-  // from the list it was pinned from.
   const known = new Map([...classes, ...facetRows.pins].map(b => [b.c.value, b]));
   const pinRows = pins.map(c => known.get(c) || {c: {value: c}});
   const rest = classes.filter(b => !pins.includes(b.c.value));
-  // Every class carries its namespace hint, so the vocabulary a class belongs
-  // to reads off the list rather than out of the hover. Graph names share one
-  // namespace, so there the hint appears only where two share a title.
   const render = (rows, iriOf, nameOf, key, always, isPinned = false) => {
     const seen = {};
     for (const b of rows) { const nm = nameOf(b); seen[nm] = (seen[nm] || 0) + 1; }
@@ -768,7 +584,6 @@ function togglePin(iri) {
   setPins(list.includes(iri) ? list.filter(c => c !== iri) : [...list, iri]);
   renderFacets();
 }
-// Put a pinned class before or after another; the list is saved as it stands.
 function movePin(iri, target, after) {
   const list = pinned().filter(c => c !== iri);
   const at = list.indexOf(target);
@@ -778,35 +593,10 @@ function movePin(iri, target, after) {
   renderFacets();
 }
 
-// An IRI worth following in a browser rather than in this pane. http(s)
-// outside the store's own authority resolves today: a deck on github.io, a term
-// in schema.org, a person's #me, a file from a local server. The authority's
-// own IRIs are the ones a personal graph typically does not serve, so an arrow
-// there would promise a 404, and it is left off until the day it does serve.
-// A file: locator opens only from a page that is itself on file:, which is how
-// this one is normally opened, so the arrow appears where it works and nowhere
-// else.
 const isLocalFile = iri => iri.startsWith('file:');
 const followable = iri =>
   (/^https?:\/\//.test(iri) && !(AUTHORITY && iri.startsWith(AUTHORITY))) ||
   (isLocalFile(iri) && location.protocol === 'file:');
-// A file: link opens in this tab, everything else in a new one. Chrome refuses
-// to load a file: URL into a tab opened by a page - measured: the tab appears
-// and the load aborts - while a plain same-tab click to file: from a file:
-// page is allowed. So the target attribute is the difference between a
-// document that opens and one that silently does not. A binary the browser
-// cannot render (.pptx, .epub) turns the click into a download and leaves this
-// page where it was; a .pdf, .md or .html replaces it, and Back returns.
-// Marked with a class the click handler lets through untouched, so following
-// the link never also opens the entity pane behind it.
-// Where a resource is opened, from the settings in the store: a
-// cfg:dereferenceRule matches on cfg:uriPrefix and, optionally,
-// cfg:fileExtension, and its cfg:template builds the address (nodica's
-// vocabulary; settings.example.ttl shows the shape). The longest
-// matching prefix wins and, between equal prefixes, the rule naming an
-// extension - so Markdown can go to a note editor while its neighbours stay
-// with the browser. A settings change reaches the page at the next store
-// build; an endpoint carrying no settings leaves every link as it was.
 let openRules = [];
 async function loadOpenRules() {
   try {
@@ -829,20 +619,13 @@ async function loadOpenRules() {
   } catch (e) { openRules = []; return false; }
 }
 
-// A template resolving to one of these is never opened: they would execute in
-// this page rather than address a resource outside it.
 const BAD_SCHEME = /^(javascript|data|blob|vbscript):/i;
-// The winning rule's address, placeholders filled. {RAW}, {URI} and {LOCAL}
-// are nodica's; {PATH} and {PATHENC} exist because a desktop application is
-// addressed by a path and not by a URI.
 function appLink(iri) {
   for (const r of openRules) {
     if (r.prefix && !iri.startsWith(r.prefix)) continue;
     if (r.ext && !iri.split(/[?#]/)[0].toLowerCase().endsWith('.' + r.ext)) continue;
     let path = '', pathenc = '';
     if (isLocalFile(iri)) {
-      // file:///C:/a/b.md -> C:/a/b.md, file:///home/a/b.md -> /home/a/b.md:
-      // the slash before a drive letter belongs to the URI, not to the path.
       try {
         let rest = iri.replace(/^file:\/\/(localhost)?/i, '').split(/[?#]/)[0];
         if (/^\/[A-Za-z]:/.test(rest)) rest = rest.slice(1);
@@ -862,13 +645,6 @@ function appLink(iri) {
   return null;
 }
 
-// The arrow follows the IRI in the browser, in a new tab, so the page and its
-// queries are still there afterwards. A file: URL opens in a tab the page
-// opened as readily as any other - a target=_blank link from a file: page
-// opens the file in a new tab - so nothing here
-// needs the same-tab special case the earlier version carried.
-// The named link stays beside a value that already opens the application: both
-// go to the same place, and the name is what says where the click will land.
 const followLink = iri => {
   const app = appLink(iri);
   const appHtml = app
@@ -887,8 +663,6 @@ const PIN_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="t
   'stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M6 2h4M7 2v4.5L4.5 9.5h7L9 6.5V2M8 9.5V14"/></svg>';
 const copyButton = iri =>
   `<button class="copy" data-copy="${esc(iri)}" title="Copy ${esc(iri)}" aria-label="Copy IRI">${COPY_ICON}</button>`;
-// The clipboard API wants a secure context; where it refuses, the older
-// selection copy still works.
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); }
   catch (e) {
@@ -907,12 +681,8 @@ const rowHtml = (iri, label, date) =>
        date ? `<span class="d">${esc(date)}</span>` : ''}</div>
      <div class="t"><code>${esc(short(iri))}</code>${copyButton(iri)}${followLink(iri)}</div></div>`;
 
-// Dates for just the visible page - one VALUES query over 200 subjects,
-// so the default view never pays for a store-wide date scan.
 async function attachDates(rows) {
   if (NO_DATES) return;
-  // An IRI carrying whitespace or angle brackets would break out of the
-  // VALUES block; drop it rather than send a malformed query.
   const safe = rows.filter(r => /^[a-z][a-z0-9+.-]*:/i.test(r.iri) && !/[\s<>"{}|^`]/.test(r.iri));
   if (!safe.length) return;
   const dates = await sparql(`SELECT ?s (MIN(?d) AS ?date) WHERE {
@@ -925,21 +695,14 @@ async function attachDates(rows) {
 
 async function loadResults(append, current) {
   let rows, total;
-  // The sidecar returns at most SEARCH_CAP hits, and every path that uses them
-  // - the ranked list, the facet counts, the joins - sees only those.
   const note = state.text && searchHits && searchTotal > searchHits.length
     ? `; search uses the first ${searchHits.length} of ${searchTotal} matches` : '';
   if (state.text && searchHits && !state.cls && !state.graph && !state.sort) {
-    // Pure search: page the sidecar's ranked hits directly, label matches
-    // first. SPARQL can rank the same way, at ~150ms a keystroke plus a
-    // second scan for the total; the sidecar does both at once.
     rows = searchHits.slice(state.offset, state.offset + PAGE)
                      .map(h => ({ iri: h.iri, label: h.label }));
     total = searchHits.length;
     await attachDates(rows);
   } else if (!state.sort) {
-    // The page is chosen by IRI first and labelled after, so an entity with
-    // two labels takes one row rather than two.
     const where = whereWith();
     const [countRows, pageRows] = await Promise.all([
       append ? Promise.resolve(null)
@@ -955,18 +718,11 @@ async function loadResults(append, current) {
     rows = pageRows.map(b => ({ iri: b.s.value, label: b.label ? b.label.value : null }));
     await attachDates(rows);
   } else {
-    // Date sort: the order must exist before LIMIT/OFFSET, so this is the one
-    // path that scans every matching entity for its earliest date (~500 ms
-    // store-wide). Undated entities sink to the end under either direction.
     const where = whereWith();
     const order = `DESC(BOUND(?date)) ${state.sort === 'asc' ? 'ASC' : 'DESC'}(?date) ?s`;
     const [countRows, pageRows] = await Promise.all([
       append ? Promise.resolve(null)
              : sparql(`${PREFIX}SELECT (COUNT(DISTINCT ?s) AS ?n) WHERE { ${where} }`),
-      // The order is taken one level above the aggregate: Virtuoso refuses
-      // BOUND(?date) in the ORDER BY of the query that computes ?date as
-      // MIN(?d), so date sort failed on CORDIS and every Virtuoso store.
-      // The PKG and the Nobel data give the same rows either way (2026-10-02).
       sparql(`${PREFIX}SELECT ?s ?date (SAMPLE(?l) AS ?label) WHERE {
         { SELECT ?s ?date WHERE {
             { SELECT ?s (MIN(?d) AS ?date) WHERE {
@@ -1004,19 +760,51 @@ async function loadResults(append, current) {
   }
 }
 
-// The pane's three queries: the entity's facts, the facts of its blank
-// nodes, and the links to it.
-function detailRows(iri) {
-  // A given graph list scopes the pane too, so it never shows a fact or a
-  // link that the facets and the list above it have already ruled out of
-  // the declared dataset.
+function linksQuery(iri, limit, total) {
   const inGraph = pattern => namedGraphs ? `${GRAPH_VALUES}GRAPH ?g { ${pattern} }` : pattern;
   const g = namedGraphs ? '?g' : '';
-  const incoming = `${PREFIX}SELECT ?s ?p ${g} (SAMPLE(?sl) AS ?slabel) (SAMPLE(?pl) AS ?plabel) WHERE {
+  return `${PREFIX}SELECT ?s ?p ${g} (SAMPLE(?sl) AS ?slabel) (SAMPLE(?pl) AS ?plabel) WHERE {
       ${inGraph(`?s ?p <${iri}>`)}
       OPTIONAL { ?s rdfs:label ?sl }
       OPTIONAL { ?p rdfs:label ?pl }
-    } GROUP BY ?s ?p ${g} ORDER BY ?p LIMIT ${LINK_CAP + 1}`;
+    } GROUP BY ?s ?p ${g} ORDER BY ?p${total ? ` ?s ${g}` : ''} LIMIT ${limit + 1}`;
+}
+
+function linkRow(r) {
+  const graph = !r.g ? '' :
+    ` <span class="t" style="font-size:11px" title="${esc(r.g.value)}">${esc(localName(r.g.value))}</span>`;
+  return `<tr><td class="p" title="${esc(r.p.value)}">${esc(r.plabel ? r.plabel.value : localName(r.p.value))}</td>
+        <td>${r.s.type === 'bnode'
+          ? '<span class="t">[blank node]</span>'
+          : `<a href="#" data-iri="${esc(r.s.value)}" title="${esc(r.s.value)}">${esc(r.slabel ? r.slabel.value : short(r.s.value))}</a>${followLink(r.s.value)}`}
+        ${graph}</td></tr>`;
+}
+
+async function showMoreLinks(button) {
+  const pane = button.closest('.pane');
+  const want = Number(button.dataset.morelinks) + LINK_CAP;
+  button.disabled = true;
+  button.textContent = 'loading…';
+  try {
+    const rows = await sparql(linksQuery(pane.dataset.iri, want, true));
+    if (!pane.isConnected) return;
+    pane.querySelector('table.links').innerHTML = rows.slice(0, want).map(linkRow).join('');
+    if (rows.length > want) {
+      button.dataset.morelinks = want;
+      button.disabled = false;
+      button.textContent = `show ${LINK_CAP} more`;
+    } else {
+      button.remove();
+    }
+  } catch (e) {
+    button.disabled = false;
+    button.textContent = `show ${LINK_CAP} more`;
+    fail(e);
+  }
+}
+
+function detailRows(iri) {
+  const inGraph = pattern => namedGraphs ? `${GRAPH_VALUES}GRAPH ?g { ${pattern} }` : pattern;
   return Promise.all([
     sparql(`${PREFIX}SELECT ?p ?o (SAMPLE(?pl) AS ?plabel) (SAMPLE(?ol) AS ?olabel) WHERE {
       ${inGraph(`<${iri}> ?p ?o`)}
@@ -1028,28 +816,11 @@ function detailRows(iri) {
       OPTIONAL { ?p2 rdfs:label ?p2l }
       OPTIONAL { ?o2 rdfs:label ?o2l }
     } GROUP BY ?p ?b ?p2 ?o2 ORDER BY ?p ?b ?p2 LIMIT 300`),
-    sparql(incoming),
+    sparql(linksQuery(iri, LINK_CAP, false)),
   ]);
 }
 
 async function loadDetail(iri, pane) {
-  // A blank-node value cannot be opened, so its own facts are fetched by a
-  // second query and render inline: a dataset's class partition reads as
-  // "class ResearchNote · instance count 23", with a link to list them. A
-  // separate query rather than an OPTIONAL with a FILTER on the outer value:
-  // Oxigraph evaluates that by materialising every triple first, and gave no
-  // answer in two minutes where the two queries below take a fraction of a second.
-  // Each list asks for one row past its cap, which is how the pane knows to
-  // say it stopped short.
-  // Facts are read from every named graph, or from the default graph of a
-  // store that has none. A fact is listed once however many graphs hold it:
-  // the Nobel Prize data keeps each in its data graph and again in a
-  // per-record metadata graph, and listing it per graph showed laureate/1's
-  // 18 facts as 36 (2026-09-29). Which graph holds a statement is shown only
-  // under "Linked from", where it tells the linking records apart.
-  // A pane asked inside graphs that finds nothing may have asked a store
-  // without any: the Graph section's answer can come after the pane's, or
-  // never.
   const inGraphs = namedGraphs;
   const [factRows, nestedRows, incomingRows] = await detailRows(iri);
   if (!factRows.length && !incomingRows.length && inGraphs) {
@@ -1061,11 +832,7 @@ async function loadDetail(iri, pane) {
     if (!namedGraphs) return loadDetail(iri, pane);
   }
   const graphOf = r => r.g ? r.g.value : '';
-  // A pane closed or replaced while its queries ran is no longer on the page.
   if (!pane.isConnected) return;
-  // Under "Linked from" each statement keeps its row, with the graph that
-  // holds it beside it, and the copies of one link held in several graphs sit
-  // together, so they read as one link stated in two places.
   const term = t => `${t.type}|${t.value}|${t['xml:lang'] || ''}|${t.datatype || ''}`;
   const together = key => (a, b) => key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0;
   const facts = factRows.slice(0, FACT_CAP);
@@ -1074,9 +841,6 @@ async function loadDetail(iri, pane) {
   const moreFacts = factRows.length > FACT_CAP;
   const moreLinks = incomingRows.length > LINK_CAP;
   const linkGraphs = new Set(incoming.map(graphOf).filter(Boolean)).size;
-  // Fold each blank node's facts into its row. Matched by the blank node's
-  // label when the endpoint keeps labels stable across queries (Oxigraph
-  // does), otherwise by position under the same property.
   const nestedGroups = new Map();
   for (const r of nestedRows) {
     const key = `${r.p.value}|${r.b.value}`;
@@ -1094,16 +858,8 @@ async function loadDetail(iri, pane) {
     const n = seenUnder[under] = (seenUnder[under] || 0) + 1;
     row.inner = groups[n - 1] || [];
   }
-  // Properties and linked resources read by their labels, exactly as the class
-  // facets do; the IRI is one hover away.
   const propCell = r =>
     `<td class="p" title="${esc(r.p.value)}">${esc(r.plabel ? r.plabel.value : localName(r.p.value))}</td>`;
-  // Where a rule hands the resource to an application, the value itself is that
-  // link: opening a note means clicking the note, not finding a second small
-  // link beside it. What is given up is the node page for that IRI, which for a
-  // file: locator is no loss - a file path locates a resource, it does not
-  // identify one.
-  // Everything with no rule keeps the graph link it had.
   const iriLink = (v, label) => {
     const app = appLink(v);
     if (app) {
@@ -1126,10 +882,6 @@ async function loadDetail(iri, pane) {
     : r.o.type === 'bnode'
       ? (r.inner.length ? innerHtml(r.inner) : '<span class="t">[blank node]</span>')
       : esc(r.o.value);
-  // The graph a link sits in, in grey beside it; nothing where the store has
-  // no named graphs.
-  const graphLine = r => !r.g ? '' :
-    ` <span class="t" style="font-size:11px" title="${esc(r.g.value)}">${esc(localName(r.g.value))}</span>`;
   const labelRow = facts.find(r => r.p.value === 'http://www.w3.org/2000/01/rdf-schema#label');
   const heading = labelRow ? labelRow.o.value : localName(iri);
   pane.querySelector('.spine').textContent = heading;
@@ -1137,9 +889,6 @@ async function loadDetail(iri, pane) {
     `<h2>Entity</h2>` +
     `<p class="ehead">${esc(heading)}</p>` +
     `<p><code title="${esc(iri)}">${esc(short(iri))}</code>${copyButton(iri)}${followLink(iri)}</p>` +
-    // A link to the entity is a fact about it too, stated from the other end,
-    // so the count covers both lists; the links are counted again by the
-    // graphs they come from, which is what tells them apart.
     `<p class="t">${moreFacts || moreLinks ? 'more than ' : ''}${facts.length + incoming.length} facts` +
     (incoming.length ? `, ${moreLinks ? `more than ${LINK_CAP}` : incoming.length} of them linking here` +
       (linkGraphs ? ` from ${linkGraphs} graph${linkGraphs === 1 ? '' : 's'}` : '') : '') +
@@ -1147,14 +896,10 @@ async function loadDetail(iri, pane) {
     `<table>` + facts.map(r =>
       `<tr>${propCell(r)}<td>${objCell(r)}</td></tr>`).join('') +
     `</table>` +
-    (incoming.length ? `<h2>Linked from</h2><table>` + incoming.map(r =>
-      `<tr><td class="p" title="${esc(r.p.value)}">${esc(r.plabel ? r.plabel.value : localName(r.p.value))}</td>
-        <td>${r.s.type === 'bnode'
-          // A blank node has no IRI to open a pane on, so it is named, not linked.
-          ? '<span class="t">[blank node]</span>'
-          : `<a href="#" data-iri="${esc(r.s.value)}" title="${esc(r.s.value)}">${esc(r.slabel ? r.slabel.value : short(r.s.value))}</a>${followLink(r.s.value)}`}
-        ${graphLine(r)}</td></tr>`).join('') +
-      `</table>` : '');
+    (incoming.length ? `<h2>Linked from</h2><table class="links">` + incoming.map(linkRow).join('') +
+      `</table>` + (moreLinks
+        ? `<button class="clear" data-morelinks="${LINK_CAP}" title="The next ${LINK_CAP} links to this entity">show ${LINK_CAP} more</button>`
+        : '') : '');
 }
 
 async function refresh() {
@@ -1181,10 +926,7 @@ async function refresh() {
 }
 
 document.addEventListener('click', e => {
-  // An external link is the browser's business: no preventDefault, and no
-  // walking on to the data-iri handler that would open the entity pane too.
   if (e.target.closest('a.ext, a.app, a.opens')) return;
-  // Copying never opens the row the button sits in.
   const copy = e.target.closest('button.copy');
   if (copy) {
     copyText(copy.dataset.copy).then(() => {
@@ -1206,18 +948,15 @@ document.addEventListener('click', e => {
     return;
   }
   const clear = e.target.closest('[data-clear]');
-  if (clear) { state[clear.dataset.clear] = null; refresh(); return; }
+  if (clear) { state[clear.dataset.clear] = null; renderFacets(); refresh(); return; }
   if (e.target.id === 'catlink') { if (CATALOGUE) openEntity(CATALOGUE, null); return; }
   if (e.target.id === 'panes') { setStacked(!stacked); return; }
   const spine = e.target.closest('.spine');
   if (spine) { reveal(spine.parentElement); return; }
-  // The list's spine is drawn by CSS, and its hidden rows take no clicks, so a
-  // click on it lands on the list itself.
   if (e.target === results && results.classList.contains('covered')) {
     strip.scrollTo({ left: 0, behavior: 'smooth' });
     return;
   }
-  // "list" beside a class partition: the menu opens on that dish.
   const cls = e.target.closest('[data-cls]');
   if (cls) {
     e.preventDefault();
@@ -1246,17 +985,14 @@ document.addEventListener('click', e => {
     });
     return;
   }
+  const more = e.target.closest('button[data-morelinks]');
+  if (more) { showMoreLinks(more); return; }
   const f = e.target.closest('.facet');
   if (f) { state[f.dataset.key] = state[f.dataset.key] === f.dataset.v ? null : f.dataset.v;
-           refresh(); return; }
+           renderFacets(); refresh(); return; }
   const link = e.target.closest('[data-iri]');
   if (link) { e.preventDefault(); openEntity(link.dataset.iri, link.closest('.pane')); }
 });
-// Switching endpoint reloads rather than re-querying in place: prefixes, open
-// rules, the search sidecar and every count belong to the store just left, and
-// a reload is the one way to be sure none of them survives the move. The choice
-// goes into the URL as well as into storage, so the address bar keeps saying
-// which store is on screen and the link can be handed to someone else.
 document.getElementById('ep').addEventListener('change', e => {
   const url = e.target.value;
   remember(REMEMBERED, url);
@@ -1264,7 +1000,6 @@ document.getElementById('ep').addEventListener('change', e => {
   params.set('endpoint', url);
   location.search = params.toString();
 });
-// Pinned classes reorder by dragging, or with Alt+↑ and Alt+↓ on a focused one.
 const facetsEl = document.getElementById('facets');
 let dragged = null;
 const dropMarks = () => facetsEl.querySelectorAll('.drop-before, .drop-after')
@@ -1275,7 +1010,7 @@ facetsEl.addEventListener('dragstart', e => {
   dragged = f.dataset.v;
   f.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', dragged);   // Firefox starts no drag without data
+  e.dataTransfer.setData('text/plain', dragged);
 });
 facetsEl.addEventListener('dragover', e => {
   const f = e.target.closest('.facet.pinned');
@@ -1311,12 +1046,6 @@ document.getElementById('q').addEventListener('input', e => {
   clearTimeout(timer);
   timer = setTimeout(() => { state.text = e.target.value.trim(); refresh(); }, 300);
 });
-// The panes. Single, a new entity replaces the one pane there is. Stacked, an
-// entity opened from pane k replaces everything right of k, as in Matuschak's
-// notes, and one opened from the list, the facets or the header starts a new
-// stack. An entity already open is scrolled to rather than opened twice. Each
-// pane runs its own queries once, when it opens; closing panes is only DOM
-// removal, so walking back and forth costs nothing.
 const PANES = 'opsis-panes';
 const detail = document.getElementById('detail');
 const strip = document.getElementById('strip');
@@ -1352,8 +1081,6 @@ function openEntity(iri, from) {
   syncUrl();
 }
 
-// A pane's sticky offset is its place in the stack times the spine width, so
-// every pane scrolled past stays behind as a spine of its own.
 function layout() {
   panes().forEach((p, i) => { p.style.left = stacked ? `calc(${i + 1} * var(--spine))` : ''; });
   cover();
@@ -1361,15 +1088,11 @@ function layout() {
 function reveal(p) {
   panes().forEach(q => q.classList.toggle('here', stacked && q === p));
   if (!stacked) return;
-  // A sticky pane reports where it is stuck, not where it sits in the row, so
-  // its place is summed from the widths before it.
   const before = panes().slice(0, panes().indexOf(p));
   const at = before.reduce((x, q) => x + q.offsetWidth, results.offsetWidth);
   const spine = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--spine')) || 36;
   strip.scrollTo({ left: Math.max(0, at - (before.length + 1) * spine), behavior: 'smooth' });
 }
-// A pane is covered once the next one has slid over most of it; it then
-// shows its title on the spine instead of a sliver of its content.
 function cover() {
   const all = [results, ...panes()];
   all.forEach((p, i) => {
@@ -1396,7 +1119,6 @@ function setStacked(on) {
   syncUrl();
 }
 
-// The open panes live in the URL, so a stack can be bookmarked or handed on.
 function syncUrl() {
   const params = new URLSearchParams(location.search);
   params.delete('open');

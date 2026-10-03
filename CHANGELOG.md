@@ -10,17 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **show all** to reveal the full Class list
+- `?graphs=` to restrict every count, list and entity pane to a subset of named grapphs
+- **copy as VoID** to copy a scoped link's graphs as a VoID description
+- `?dates=off` to leave out the date column and the date sort
+- **show 200 more** under an entity pane's links
 
 ### Changed
 
-- The section with linked from now shows the named graphs of each triple
-- The entity pane's summary now count the number of graphs for the linked-from statements 
+- A class or graph you click now shows as selected right away
+- The entity pane now shows a statement's named graph only under **Linked from**
+- The entity pane's summary now counts the links to the entity among its facts,
+  and the graphs those links come from
 
 ### Fixed
 
+- The vocabulary shown beside a class name is now right for DBpedia, vCard and
+  other common vocabularies, which read `ontology` or `ns`
+- The date sort no longer fails on stores that refused the query
 - The entity pane now shows facts on stores without named graphs
-- The entity pane now lists each fact once, even when several named graphs hold
-  it
+- The entity pane now lists each of the entity's own facts once, even when it is
+  in several named graphs
 
 ## [0.2.0] – 2026-09-25
 

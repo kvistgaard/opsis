@@ -20,6 +20,8 @@ index.html?endpoint=http://localhost:7878/query
 </picture>
 
 Here is also a [live demo](https://kvistgaard.github.io/opsis/?endpoint=https://data.nobelprize.org/store/sparql) on the Nobel Prize linked data.
+
+Another [live demo](https://kvistgaard.github.io/opsis/?endpoint=https://cordis.europa.eu/datalab/sparql&graphs=http://data.europa.eu/s66/graph/projects%20http://data.europa.eu/s66/graph/organisations%20http://data.europa.eu/s66/graph/fundingschemes%20http://data.europa.eu/s66/graph/euroscivoc) browses the EU's research projects in CORDIS, limited to four of its graphs: projects, organisations, funding schemes and the EuroSciVoc vocabulary of research fields.
 ## One file, all SPARQL
 
 Opsis is under 1.5K lines of HTML, CSS, and JavaScript. It has no build step, no libraries, and no server. The page sends SPARQL queries directly to the endpoint in response to user actions.
@@ -46,6 +48,27 @@ Three features use settings:
 - Choosing between several SPARQL endpoints from the header
 - Pinning classes. The classes you list in the settings appear at the top of the Class list for everyone who opens the graph. A class you pin with a click (the pin icon appears when you hover on a class) stays pinned only in your own browser but if so you wish, you can copy it as Turtle with one click and add to the settings. 
 
+### Large stores
+
+There are two ways to browse a large store with Opsis.
+
+#### Opsis alone, on some of the named graphs
+
+Add the named graphs you want to browse to the link, separated by spaces (`%20`):
+
+```
+index.html?endpoint=https://cordis.europa.eu/datalab/sparql&graphs=http://data.europa.eu/s66/graph/projects
+```
+
+Every count, list and entity pane then reads only those graphs. It stays fast as long as the graphs you give are small, however large the store. 
+
+**copy as VoID** in the header copies the graphs as a VoID description.
+
+#### Opsis with Sparqlaske
+
+Sparqlaske (to be released in October 2026) is a separate component that sits between Opsis and the SPARQL endpoint. It reads the RDF store once and builds an index of its classes and labels. It then answers the counts, lists and searches of Opsis from that index, and passes every other query directly to the endpoint. You give Sparqlaske the endpoint of the store when you start it, and Opsis the address of Sparqlaske as its endpoint. You can then browse graphs as large as Wikidata.
+
+In both cases, add `&dates=off` to leave out the date column and the date sort. 
 
 ## Troubleshooting
 
