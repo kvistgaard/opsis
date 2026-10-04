@@ -19,13 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - On a link with `?graphs=`, selecting a class or a graph no longer overloads
   some stores
+- On Virtuoso stores with a text index, search now uses the index and no
+  longer times out
 
 ## [0.3.0] – 2026-10-03
 
 ### Added
 
 - **show all** to reveal the full Class list
-- `?graphs=` to restrict every count, list and entity pane to a subset of named grapphs
+- `?graphs=` to restrict every count, list and entity pane to a subset of named graphs
 - **copy as VoID** to copy a scoped link's graphs as a VoID description
 - `?dates=off` to leave out the date column and the date sort
 - **show 200 more** under an entity pane's links
@@ -77,8 +79,9 @@ First public release.
 - Settings read from the endpoint: dereference rules in nodica's `cfg:`
   vocabulary open `file:` IRIs in desktop applications, and `dcat:DataService`
   descriptions fill an endpoint picker.
-- Search over every string value, through a `/search` sidecar when the
-  endpoint offers one and a SPARQL `CONTAINS` scan when it does not.
+- Search over every string value, through a search service at `/search` on
+  the endpoint's server if when the is one, and a SPARQL `CONTAINS` filter if
+  there isn't
 - A date column sorted by each entity's earliest `xsd:date` or `xsd:dateTime`.
 - Queries sent as the form-encoded `query=` field, which public endpoints that
   refuse a bare `application/sparql-query` body accept.

@@ -290,6 +290,29 @@ async function probeSearchApi() {
 
 const SEARCH_CAP = 2000;
 
+let textIndex = null;
+async function probeTextIndex() {
+  if (FORCE_SPARQL) { textIndex = false; return; }
+  if (textIndex !== null) return;
+  textIndex = false;
+  const scoped = p => GIVEN_GRAPHS.length ? inGiven('gProbe', p) : p;
+  try {
+    await sparql(`SELECT ?o WHERE { ${scoped(`?s ?p ?o . ?o bif:contains '"opsis"' .`)} } LIMIT 1`);
+    const [b] = await sparql(`SELECT ?o WHERE { ${scoped('?s ?p ?o .')}
+      FILTER(isLiteral(?o) && REGEX(STR(?o), "[A-Za-z]{4}")) } LIMIT 1`);
+    const word = b && b.o.value.match(/[A-Za-z]{4,}/)[0];
+    if (!word) return;
+    const found = await sparql(`SELECT ?o WHERE { ${scoped(`?s ?p ?o . ?o bif:contains '"${word}"' .`)} } LIMIT 1`);
+    textIndex = found.length > 0;
+  } catch (e) {  }
+}
+
+function textQuery(text) {
+  const words = text.match(/[\p{L}\p{N}]+/gu);
+  if (!words) return null;
+  return words.map(w => w.length >= 4 ? `"${w}*"` : `"${w}"`).join(' AND ');
+}
+
 const turns = {};
 const take = kind => {
   const n = turns[kind] = (turns[kind] || 0) + 1;
@@ -300,10 +323,14 @@ const fail = e => {
 };
 
 async function ensureSearch() {
-  if (!state.text || searchApi === false) { searchHits = null; searchTotal = 0; return true; }
+  if (!state.text) { searchHits = null; searchTotal = 0; return true; }
   const text = state.text;
   await probeSearchApi();
-  if (!searchApi) { searchHits = null; return true; }
+  if (!searchApi) {
+    searchHits = null; searchTotal = 0;
+    await probeTextIndex();
+    return text === state.text;
+  }
   const r = await fetch(`${searchApi}?q=${encodeURIComponent(text)}&limit=${SEARCH_CAP}`);
   const j = await r.json();
   if (text !== state.text) return false;
@@ -315,6 +342,11 @@ async function ensureSearch() {
 function textClause() {
   if (!state.text) return '';
   if (searchHits) return `VALUES ?s { ${searchHits.map(h => `<${h.iri}>`).join(' ')} }`;
+  const words = textIndex && textQuery(state.text);
+  if (words) {
+    const match = `?s ?sfP ?sfV . ?sfV bif:contains '${words}' .`;
+    return GIVEN_GRAPHS.length ? inGiven('gText', match) : match;
+  }
   const t = state.text.replace(/["\\]/g, '\\$&');
   return GIVEN_GRAPHS.length
     ? `${inGiven('gText', '?s ?sfP ?sfV')} FILTER(isLiteral(?sfV) && CONTAINS(LCASE(STR(?sfV)), LCASE("${t}")))`
@@ -973,7 +1005,9 @@ async function refresh() {
     await Promise.all([loadFacets(take('facets')), loadResults(false, take('results'))]);
     if (!current()) return;
     const scan = searchApi === false && state.text
-      ? (FORCE_SPARQL ? ' (forced SPARQL scan)' : ' (no search sidecar; SPARQL scan)')
+      ? (FORCE_SPARQL ? ' (forced SPARQL scan)'
+        : textIndex && textQuery(state.text) ? ' (Virtuoso text index; matches words, not substrings)'
+        : ' (no search sidecar; SPARQL scan)')
       : '';
     const cut = partial ? ' – the endpoint cut some answers short; counts may be incomplete' : '';
     const scope = GIVEN_GRAPHS.length
