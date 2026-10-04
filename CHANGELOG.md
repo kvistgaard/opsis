@@ -80,7 +80,7 @@ First public release.
   vocabulary open `file:` IRIs in desktop applications, and `dcat:DataService`
   descriptions fill an endpoint picker.
 - Search over every string value, through a search service at `/search` on
-  the endpoint's server if when the is one, and a SPARQL `CONTAINS` filter if
+  the endpoint's server if when there is one, and a SPARQL `CONTAINS` filter if
   there isn't
 - A date column sorted by each entity's earliest `xsd:date` or `xsd:dateTime`.
 - Queries sent as the form-encoded `query=` field, which public endpoints that
