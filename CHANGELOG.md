@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Opsis on mobile
+- The version and build time in the bottom left corner
 
 ### Changed
 
