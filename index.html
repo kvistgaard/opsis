@@ -345,7 +345,9 @@ function textClause() {
   const words = textIndex && textQuery(state.text);
   if (words) {
     const match = `?s ?sfP ?sfV . ?sfV bif:contains '${words}' .`;
-    return GIVEN_GRAPHS.length ? inGiven('gText', match) : match;
+    return GIVEN_GRAPHS.length
+      ? `{ SELECT DISTINCT ?s WHERE { ${match} } }\n  FILTER EXISTS { ${inGiven('gText', '?s ?gtP ?gtO')} }`
+      : match;
   }
   const t = state.text.replace(/["\\]/g, '\\$&');
   return GIVEN_GRAPHS.length
