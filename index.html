@@ -77,6 +77,7 @@
   h2:first-child { margin-top:0; }
   #results h2 { display:flex; justify-content:space-between; align-items:baseline;
                 gap:10px; padding:0 6px; }
+  h2 .typed { text-transform:none; letter-spacing:normal; }
   .facet { display:flex; justify-content:space-between; gap:8px; padding:4px 6px;
            border-radius:4px; cursor:pointer; align-items:baseline; }
   .facet:hover { background:var(--chip); }
@@ -86,6 +87,10 @@
   .facet .ns { color:var(--muted); font-size:11px; margin-left:5px; }
   .facet.on .ns { color:var(--on-accent); opacity:.75; }
   .facet .r { display:flex; gap:6px; align-items:baseline; }
+  button.seek { border:0; background:none; padding:0 2px; margin-left:4px; cursor:pointer;
+                color:inherit; opacity:0; line-height:1; vertical-align:-1px; }
+  h2:hover button.seek, button.seek:focus-visible { opacity:.7; }
+  button.seek.on, button.seek:hover { opacity:1; color:var(--accent); }
   button.pin { border:0; background:none; padding:0; cursor:pointer; color:inherit;
                opacity:0; line-height:1; align-self:center; }
   .facet:hover button.pin, button.pin:focus-visible { opacity:.7; }
@@ -177,7 +182,7 @@
     h2, .facet .ns, a.lst, a.ext, a.app { font-size:12px; }
     #status, .facet .n, .row .t, .t, .row .d, .kv .k, button.clear, #catlink, #ep, code { font-size:13px; }
     .ehead { font-size:17px; }
-    button.copy svg, button.pin svg { width:13px; height:13px; }
+    button.copy svg, button.pin svg, button.seek svg { width:13px; height:13px; }
     #nav:not([hidden]) { display:flex; align-items:center; gap:8px; padding:0 12px 0 4px;
                          border-bottom:1px solid var(--line); }
     #back { border:0; background:none; color:var(--accent); font:inherit; font-size:16px;
@@ -203,6 +208,7 @@
     .row .t > :not(code) { flex:none; }
     button.pin { opacity:.35; padding:6px; margin:-6px; }
     .facet.pinned button.pin { opacity:.6; }
+    button.seek { opacity:.35; padding:6px; margin:-6px 0; }
     button.copy { padding:6px; margin-top:-6px; margin-bottom:-6px; }
     a.ext { padding:6px 4px; }
     #detail table, #detail tbody, #detail tr, #detail td { display:block; width:auto; }
@@ -231,7 +237,7 @@
   <select id="ep" title="Which SPARQL endpoint to read through" hidden></select>
   <button id="panes" title="Stacked panes: open each entity beside the one it was opened from" aria-pressed="false">stack</button>
   <button id="catlink" title="The data catalogue: every dataset, its files, graphs and record counts" hidden>catalogue</button>
-  <input id="q" placeholder="search…" autocomplete="off" enterkeyhint="search"
+  <input id="q" placeholder="Search everything" autocomplete="off" enterkeyhint="search"
          title="Searches every string value an entity carries, not only labels">
   <a id="gh-link" href="https://github.com/kvistgaard/opsis" target="_blank" rel="noopener noreferrer"
      aria-label="View source on GitHub" title="View source on GitHub">
@@ -249,7 +255,7 @@
   </div>
 </main>
 <a id="version" href="https://github.com/kvistgaard/opsis/blob/main/CHANGELOG.md" target="_blank"
-   rel="noopener" title="Opsis 0.3.0 with changes not yet released, built 2026-10-04 12:35, page c263f2d">v0.3.0+ · 2026-10-04 12:35</a>
+   rel="noopener" title="Opsis 0.3.0 with changes not yet released, built 2026-10-05 09:43, page 954090e">v0.3.0+ · 2026-10-05 09:43</a>
 <script>
 const REMEMBERED = 'opsis-endpoint';
 const remember = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -261,7 +267,7 @@ const ENDPOINT = new URLSearchParams(location.search).get('endpoint')
 const PAGE = 200;
 const FACT_CAP = 300;
 const LINK_CAP = 200;
-const state = {cls: null, graph: null, text: '', offset: 0, sort: null};
+const state = {cls: null, graph: null, text: '', within: false, offset: 0, sort: null};
 let CATALOGUE = null;
 let AUTHORITY = null;
 
@@ -563,7 +569,7 @@ function filters(except, bound = false) {
       ? `?leaf rdfs:subClassOf* <${state.cls}> .\n  ${inGiven('gType', '?s a ?leaf')}`
       : `?s a/rdfs:subClassOf* <${state.cls}> .`);
   }
-  const t = textClause();
+  const t = except && state.within ? '' : textClause();
   if (state.graph && except !== 'graph') {
     const exists = GIVEN_GRAPHS.length && (bound || out.length + (t ? 1 : 0) > 0);
     out.push(exists ? `FILTER EXISTS { GRAPH <${state.graph}> { ?s ?anyP ?anyO } }`
@@ -585,6 +591,7 @@ const offersChoice = rows => rows.length >= 2 &&
 const shown = key => offered[key] !== false || !!state[key];
 
 let facetRows = {classes: [], graphs: [], pins: [], more: false};
+let facetsDue = false;
 const CLASS_CAP = 40;
 let allClasses = false;
 
@@ -633,6 +640,7 @@ async function loadFacets(current) {
     } GROUP BY ?c ?n`),
   ]);
   if (!current()) return;
+  facetsDue = false;
   if (!state.cls && !state.graph && !state.text) {
     if (offered.cls === null) offered.cls = offersChoice(classes);
     if (offered.graph === null) offered.graph = offersChoice(graphs);
@@ -648,10 +656,14 @@ function renderFacets() {
   const known = new Map([...classes, ...facetRows.pins].map(b => [b.c.value, b]));
   const pinRows = pins.map(c => known.get(c) || {c: {value: c}});
   const rest = classes.filter(b => !pins.includes(b.c.value));
+  const sought = target !== 'list' && sectionFilter[target].toLowerCase();
+  const found = {cls: 0, graph: 0};
   const render = (rows, iriOf, nameOf, key, always, isPinned = false) => {
     const seen = {};
     for (const b of rows) { const nm = nameOf(b); seen[nm] = (seen[nm] || 0) + 1; }
-    return rows.map(b => {
+    return rows.filter(b => key !== target || !sought ||
+        [nameOf(b), iriOf(b), nsHint(iriOf(b))].some(s => s.toLowerCase().includes(sought))).map(b => {
+      found[key]++;
       const v = iriOf(b), nm = nameOf(b), n = b.n ? b.n.value : '0';
       const hint = (always || seen[nm] > 1) ? `<span class="ns">· ${esc(nsHint(v))}</span>` : '';
       const pin = key !== 'cls' ? '' :
@@ -664,7 +676,9 @@ function renderFacets() {
     }).join('');
   };
   const section = (key, title, body, show = shown(key)) => !show ? '' :
-    `<h2>${title} ${state[key] ? `<button class="clear" data-clear="${key}">clear</button>` : ''}</h2>` + body;
+    `<h2>${title}${seekButton(key)} ${state[key] ? `<button class="clear" data-clear="${key}">clear</button>` : ''}</h2>` + body +
+    (key === target && sought && !found[key]
+      ? `<p class="t">No ${title.toLowerCase()} matches “${esc(sectionFilter[key])}”.</p>` : '');
   const clsName = b => b.label ? b.label.value : localName(b.c.value);
   const own = ownPins && !samePins(ownPins, storePins);
   const pinbar = !pins.length && !own ? '' : `<div class="pinbar">${own ?
@@ -674,10 +688,11 @@ function renderFacets() {
     section('cls', 'Class',
       render(pinRows, b => b.c.value, clsName, 'cls', true, true) + pinbar +
       (shown('cls') ? render(rest, b => b.c.value, clsName, 'cls', true) +
-        (facetRows.more ? '<div class="allcls"><button class="clear" id="allcls" title="List every class, not only the forty largest">show all</button></div>' : '') : ''),
+        (facetRows.more && !(target === 'cls' && sought) ? '<div class="allcls"><button class="clear" id="allcls" title="List every class, not only the forty largest">show all</button></div>' : '') : ''),
       shown('cls') || pins.length > 0) +
     section('graph', 'Graph',
       render(graphs, b => b.g.value, b => b.title ? b.title.value : localName(b.g.value), 'graph'));
+  searchPrompt();
 }
 
 function togglePin(iri) {
@@ -844,7 +859,8 @@ async function loadResults(append, current) {
   if (!current()) return;
   const shown = state.offset + rows.length;
   const glyph = state.sort === 'desc' ? '▼' : state.sort === 'asc' ? '▲' : '⇅';
-  const header = `<h2><span>Entities (${total ? `showing 1–${shown} of ${total}` : '0'}${note})</span>
+  const sought = state.text ? ` matching <span class="typed">“${esc(state.text)}”</span>` : '';
+  const header = `<h2><span>Entities${sought} (${total ? `showing 1–${shown} of ${total}` : '0'}${note})${seekButton('list')}</span>
     ${NO_DATES ? '' : `<button class="clear" id="sortd" title="Sort by date: newest first / oldest first / off">date ${glyph}</button>`}</h2>`;
   const body = rows.map(r => rowHtml(r.iri, r.label, r.date)).join('');
   const more = shown < total
@@ -1003,16 +1019,17 @@ async function loadDetail(iri, pane) {
         : '') : '');
 }
 
-async function refresh() {
+async function refresh(listOnly = false) {
   const s = document.getElementById('status');
   const current = take('refresh');
+  if (!listOnly) facetsDue = true;
   try {
     s.textContent = 'querying…';
     partial = false;
     state.offset = 0;
     await loadSettings();
     if (!await ensureSearch() || !current()) return;
-    await Promise.all([loadFacets(take('facets')), loadResults(false, take('results'))]);
+    await Promise.all([listOnly ? null : loadFacets(take('facets')), loadResults(false, take('results'))]);
     if (!current()) return;
     const scan = searchApi === false && state.text
       ? (FORCE_SPARQL ? ' (forced SPARQL scan)'
@@ -1051,20 +1068,25 @@ document.addEventListener('click', e => {
     return;
   }
   const clear = e.target.closest('[data-clear]');
-  if (clear) { state[clear.dataset.clear] = null; renderFacets(); refresh(); return; }
+  if (clear) { state[clear.dataset.clear] = null; selectionChanged(); renderFacets(); refresh(); return; }
+  const seek = e.target.closest('button.seek');
+  if (seek) { setTarget(seek.dataset.seek); qEl.focus(); return; }
   if (e.target.id === 'catlink') { if (CATALOGUE) openEntity(CATALOGUE, null); return; }
   if (e.target.id === 'panes') { setStacked(!stacked); return; }
   const spine = e.target.closest('.spine');
   if (spine) { reveal(spine.parentElement); return; }
   if (e.target === results && results.classList.contains('covered')) {
     strip.scrollTo({ left: 0, behavior: 'smooth' });
+    setTarget('list');
     return;
   }
   const cls = e.target.closest('[data-cls]');
   if (cls) {
     e.preventDefault();
-    state.cls = cls.dataset.cls; state.graph = null; state.text = ''; state.sort = null;
-    document.getElementById('q').value = '';
+    clearTimeout(timer); timer = 0;
+    setTarget('list');
+    state.cls = cls.dataset.cls; state.graph = null; state.text = ''; state.within = false; state.sort = null;
+    qEl.value = '';
     refresh();
     return;
   }
@@ -1084,7 +1106,7 @@ document.addEventListener('click', e => {
   if (more) { showMoreLinks(more); return; }
   const f = e.target.closest('.facet');
   if (f) { state[f.dataset.key] = state[f.dataset.key] === f.dataset.v ? null : f.dataset.v;
-           renderFacets(); refresh(); return; }
+           selectionChanged(); renderFacets(); refresh(); return; }
   const link = e.target.closest('[data-iri]');
   if (link) { e.preventDefault(); openEntity(link.dataset.iri, link.closest('.pane')); }
 });
@@ -1136,11 +1158,105 @@ facetsEl.addEventListener('keydown', e => {
   [...facetsEl.querySelectorAll('.facet.pinned')].find(x => x.dataset.v === v)?.focus();
 });
 
-let timer;
-document.getElementById('q').addEventListener('input', e => {
+const qEl = document.getElementById('q');
+let target = 'list';
+const sectionFilter = {cls: '', graph: ''};
+let timer = 0;
+
+qEl.addEventListener('input', () => {
   clearTimeout(timer);
-  timer = setTimeout(() => { state.text = e.target.value.trim(); refresh(); }, 300);
+  if (target !== 'list') { filterSection(qEl.value); return; }
+  timer = setTimeout(() => { timer = 0; search(qEl.value.trim()); }, 300);
 });
+qEl.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (!qEl.value) { setTarget('list'); return; }
+  qEl.value = '';
+  if (target !== 'list') { filterSection(''); return; }
+  clearTimeout(timer); timer = 0;
+  search('');
+});
+
+function search(text) {
+  if (text === state.text) return;
+  const counted = state.text && !state.within;
+  if (!text) state.within = false;
+  else if (!state.text) state.within = !!(state.cls || state.graph);
+  state.text = text;
+  refresh(!facetsDue && !counted && !(text && !state.within));
+}
+
+function filterSection(value) {
+  sectionFilter[target] = value.trim();
+  if (target === 'cls' && sectionFilter.cls && facetRows.more) {
+    allClasses = true;
+    loadFacets(take('facets')).catch(fail);
+  }
+  renderFacets();
+}
+
+function setTarget(t) {
+  if (t === target) return;
+  if (timer) { clearTimeout(timer); timer = 0; search(qEl.value.trim()); }
+  const left = target;
+  target = t;
+  qEl.value = t === 'list' ? state.text : sectionFilter[t];
+  if (left !== 'list' && sectionFilter[left]) { sectionFilter[left] = ''; renderFacets(); }
+  else searchPrompt();
+}
+
+function selectionChanged() {
+  if (!state.cls && !state.graph) state.within = false;
+  setTarget('list');
+}
+
+const SEEK_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" fill="none" ' +
+  'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>';
+const SEEK_NAMES = {cls: 'the Class list', graph: 'the Graph list', list: 'the entities listed'};
+const lit = key => key === target && (key !== 'list' || !!(state.cls || state.graph));
+const seekButton = key => `<button class="seek${lit(key) ? ' on' : ''}" data-seek="${key}" ` +
+  `title="Search ${SEEK_NAMES[key]}" aria-label="Search ${SEEK_NAMES[key]}">${SEEK_ICON}</button>`;
+
+function searchPrompt() {
+  qEl.placeholder = `Search ${target === 'cls' ? 'classes' : target === 'graph' ? 'graphs' : listName()}`;
+  qEl.title = target === 'list' ? 'Searches every string value an entity carries, not only labels'
+    : `Searches the names in ${SEEK_NAMES[target]}`;
+  for (const b of document.querySelectorAll('button.seek')) b.classList.toggle('on', lit(b.dataset.seek));
+}
+
+function listName() {
+  const c = state.cls && plural(facetName('cls', state.cls));
+  const g = state.graph && facetName('graph', state.graph).value;
+  return c ? (g ? `${c} in ${g}` : c) : g ? `in ${g}` : 'everything';
+}
+
+function facetName(k, v) {
+  const b = k === 'cls' ? [...facetRows.pins, ...facetRows.classes].find(r => r.c.value === v)
+                        : facetRows.graphs.find(r => r.g.value === v);
+  const l = b && (k === 'cls' ? b.label : b.title);
+  return l ? {value: l.value, lang: l['xml:lang'] || ''} : {value: localName(v), lang: ''};
+}
+
+const IRREGULAR = {person: 'people', man: 'men', woman: 'women', child: 'children', datum: 'data',
+  criterion: 'criteria', phenomenon: 'phenomena', medium: 'media'};
+const UNCOUNTED = /(?:data|equipment|evidence|feedback|information|knowledge|music|news|research|series|software|species|staff)$/i;
+function plural({value, lang}) {
+  if (lang && !/^en(-|$)/i.test(lang)) return value;
+  const [, head, tail] = value.match(/^(.+?)((?:\s+(?:of|for|in|on|at|by|with|from)\s.*)?)$/i);
+  const [, before, word] = head.match(/^(.*?)(\S+)$/);
+  if (!/^\p{L}+$/u.test(word)) return value;
+  const irregular = IRREGULAR[word.toLowerCase()];
+  const many = irregular ? word[0] + irregular.slice(1)
+    : UNCOUNTED.test(word) ? word
+    : /^\p{Lu}{2,}$/u.test(word) ? word + 's'
+    : /is$/i.test(word) ? word.slice(0, -2) + 'es'
+    : /[^aeiou]y$/i.test(word) ? word.slice(0, -1) + 'ies'
+    : /(?:ss|[au]s|x|z|ch|sh)$/i.test(word) ? word + 'es'
+    : /s$/i.test(word) ? word
+    : word + 's';
+  const name = before + many + tail;
+  return /^\p{Lu}\p{Ll}+(?:\s+[^\p{Lu}\s]\S*)*$/u.test(value) ? name[0].toLowerCase() + name.slice(1) : name;
+}
 const PANES = 'opsis-panes';
 const detail = document.getElementById('detail');
 const strip = document.getElementById('strip');
@@ -1254,11 +1370,7 @@ function renderNav() {
   document.getElementById('back').textContent = `‹ ${name(atPage - 1)}`;
   document.getElementById('scope').innerHTML = atPage !== 1 ? '' :
     ['cls', 'graph'].filter(k => state[k]).map(k => {
-      const v = state[k];
-      const b = k === 'cls' ? [...facetRows.pins, ...facetRows.classes].find(r => r.c.value === v)
-                            : facetRows.graphs.find(r => r.g.value === v);
-      const label = b && (k === 'cls' ? b.label : b.title);
-      const nm = esc(label ? label.value : localName(v));
+      const nm = esc(facetName(k, state[k]).value);
       return `<button class="chip" data-clear="${k}" aria-label="Clear ${nm}">${nm} ×</button>`;
     }).join('');
 }
@@ -1322,8 +1434,9 @@ document.addEventListener('click', e => {
   if ((f && !e.target.closest('button.pin') && state[f.dataset.key] === f.dataset.v)
       || e.target.closest('[data-cls]')) goTo(1);
 });
-const qEl = document.getElementById('q');
-qEl.addEventListener('input', () => { if (phone.matches && atPage !== 1 && qEl.value.trim()) goTo(1); });
+qEl.addEventListener('input', () => {
+  if (phone.matches && target === 'list' && atPage !== 1 && qEl.value.trim()) goTo(1);
+});
 qEl.addEventListener('keydown', e => { if (phone.matches && e.key === 'Enter') qEl.blur(); });
 phone.addEventListener('change', () => {
   if (phone.matches) {

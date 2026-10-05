@@ -11,10 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Opsis on mobile
 - The version and build time in the bottom left corner
+- Search within the selected class, graph, or both
+- Search of the Class and Graph lists, from the magnifier next to each heading
+- Escape to empty the search box
 
 ### Changed
 
 - **copy as VoID** is now a copy icon beside the status line
+- The search box now specifies what it searches
+- If you search with a class or graph selected, the class and graph counts no
+  longer change
+- The entity list's heading now shows the search
 
 ### Fixed
 

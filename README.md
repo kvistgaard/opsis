@@ -82,7 +82,6 @@ In both cases, add `&dates=off` to leave out the date column and the date sort.
 
 ## Roadmap
 
-- Pane search
 - Specific features when browsing SKOS vocabularies
 - Class filtering
 - Larger graphs
