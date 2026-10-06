@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Search within the selected class, graph, or both
 - Search of the Class and Graph lists, from the magnifier next to each heading
 - Escape to empty the search box
+- The SKOS view, from **skos** in the header or `?view=skos`: the concept
+  schemes, then a scheme's concepts as a tree
+- `?lang=` for the language of the SKOS view's labels
+- `scheme=` in the link, to open the SKOS view on one scheme
 
 ### Changed
 
@@ -22,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - If you search with a class or graph selected, the class and graph counts no
   longer change
 - The entity list's heading now shows the search
+- An entity with no `rdfs:label` is now headed by its `skos:prefLabel`
 
 ### Fixed
 
@@ -29,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   some stores
 - On Virtuoso stores with a text index, search now uses the index and no
   longer times out
+- On a link with one graph, the class list no longer waits for a graph count
+- If an endpoint refuses queries sent together, Opsis now sends them again
+  and opens
 
 ## [0.3.0] – 2026-10-03
 

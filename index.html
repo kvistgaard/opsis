@@ -145,9 +145,28 @@
              border-top-right-radius:4px; opacity:.8; }
   #version:hover { opacity:1; color:var(--accent); }
   #facets { padding-bottom:28px; }
-  #panes { font:inherit; font-size:12px; border:1px solid var(--line); border-radius:3px;
+  #panes, #skosbtn { font:inherit; font-size:12px; border:1px solid var(--line); border-radius:3px;
            background:none; color:var(--muted); cursor:pointer; padding:0 6px; }
-  #panes[aria-pressed="true"] { color:var(--accent); border-color:var(--accent); }
+  #panes[aria-pressed="true"], #skosbtn[aria-pressed="true"] { color:var(--accent); border-color:var(--accent); }
+  .tree .node { display:flex; align-items:baseline; gap:4px; border-radius:4px;
+                padding:2px 6px 2px calc(6px + var(--d, 0) * 16px); }
+  .tree .node:hover { background:var(--chip); }
+  button.chev { border:0; background:none; padding:0; width:14px; flex:none; cursor:pointer;
+                color:var(--muted); font:inherit; font-size:11px; line-height:1; }
+  button.chev:hover { color:var(--accent); }
+  span.chev { width:14px; flex:none; }
+  .tree a { color:var(--ink); text-decoration:none; }
+  .tree a:hover { color:var(--accent); }
+  .tree .hit > a { font-weight:600; }
+  .tree .nt, .tree .n { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+  .tree .n { margin-left:auto; }
+  #results .tools { display:flex; gap:10px; }
+  #facets.folded { width:var(--spine) !important; min-width:0; resize:none; overflow:hidden;
+                   padding:0; cursor:pointer; }
+  #facets.folded > * { display:none; }
+  #facets.folded::before { content:attr(data-spine); display:block; writing-mode:vertical-rl;
+                           padding:14px 0 0 10px; font-size:13px; color:var(--muted); white-space:nowrap; }
+  #facets.folded:hover::before { color:var(--accent); }
   body.stacked main { grid-template-columns:auto 1fr; }
   body.stacked #strip { display:flex; overflow-x:auto; overflow-y:hidden;
                         position:relative; min-width:0; height:100%; }
@@ -165,6 +184,7 @@
     cursor:pointer; writing-mode:vertical-rl; padding:14px 0 0 10px;
     font-size:13px; color:var(--muted); white-space:nowrap; overflow:hidden; }
   body.stacked #results.covered::before { content:'Entities'; }
+  body.stacked.skos #results.covered::before { content:'Concepts'; }
   .spine:hover, body.stacked #results.covered:hover::before { color:var(--accent); }
   body.stacked .pane.here { box-shadow:-6px 0 10px -8px rgba(0,0,0,.4), inset 3px 0 0 var(--accent); }
   #ep { font: inherit; font-size:12px; color:var(--ink); background:var(--panel);
@@ -176,7 +196,7 @@
     #q { order:1; flex:1; min-width:0; margin-left:0; font-size:16px; }
     #gh-link { order:2; }
     #status { order:4; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    #ep, #catlink { order:5; }
+    #ep, #catlink, #skosbtn { order:5; }
     #panes, #voidcopy { display:none; }
     body { font-size:15px; }
     h2, .facet .ns, a.lst, a.ext, a.app { font-size:12px; }
@@ -236,6 +256,7 @@
           aria-label="Copy the graphs as VoID" hidden><svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="5.5" width="8.5" height="8.5" rx="1.5"/><path d="M10.5 3.5V3a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v6.5a1 1 0 0 0 1 1h.5"/></svg></button>
   <select id="ep" title="Which SPARQL endpoint to read through" hidden></select>
   <button id="panes" title="Stacked panes: open each entity beside the one it was opened from" aria-pressed="false">stack</button>
+  <button id="skosbtn" title="SKOS view: the concept schemes, then each scheme's concepts as a tree" aria-pressed="false" hidden>skos</button>
   <button id="catlink" title="The data catalogue: every dataset, its files, graphs and record counts" hidden>catalogue</button>
   <input id="q" placeholder="Search everything" autocomplete="off" enterkeyhint="search"
          title="Searches every string value an entity carries, not only labels">
@@ -255,7 +276,7 @@
   </div>
 </main>
 <a id="version" href="https://github.com/kvistgaard/opsis/blob/main/CHANGELOG.md" target="_blank"
-   rel="noopener" title="Opsis 0.3.0 with changes not yet released, built 2026-10-05 09:43, page 954090e">v0.3.0+ · 2026-10-05 09:43</a>
+   rel="noopener" title="Opsis 0.3.0 with changes not yet released, built 2026-10-05 17:50, page 2e7c667">v0.3.0+ · 2026-10-05 17:50</a>
 <script>
 const REMEMBERED = 'opsis-endpoint';
 const remember = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -305,16 +326,17 @@ async function probeSearchApi() {
 const SEARCH_CAP = 2000;
 
 let textIndex = null;
-async function probeTextIndex() {
+let textFlat = false;
+async function probeTextIndex(known) {
   if (FORCE_SPARQL) { textIndex = false; return; }
   if (textIndex !== null) return;
   textIndex = false;
   const scoped = p => GIVEN_GRAPHS.length ? inGiven('gProbe', p) : p;
   try {
     await sparql(`SELECT ?o WHERE { ${scoped(`?s ?p ?o . ?o bif:contains '"opsis"' .`)} } LIMIT 1`);
-    const [b] = await sparql(`SELECT ?o WHERE { ${scoped('?s ?p ?o .')}
+    const [b] = known ? [] : await sparql(`SELECT ?o WHERE { ${scoped('?s ?p ?o .')}
       FILTER(isLiteral(?o) && REGEX(STR(?o), "[A-Za-z]{4}")) } LIMIT 1`);
-    const word = b && b.o.value.match(/[A-Za-z]{4,}/)[0];
+    const word = known || (b && b.o.value.match(/[A-Za-z]{4,}/)[0]);
     if (!word) return;
     const found = await sparql(`SELECT ?o WHERE { ${scoped(`?s ?p ?o . ?o bif:contains '"${word}"' .`)} } LIMIT 1`);
     textIndex = found.length > 0;
@@ -359,6 +381,7 @@ function textClause() {
   const words = textIndex && textQuery(state.text);
   if (words) {
     const match = `?s ?sfP ?sfV . ?sfV bif:contains '${words}' .`;
+    if (GIVEN_GRAPHS.length && textFlat) return `${match}\n  ${inGiven('gText', '?s a ?gtT')}`;
     return GIVEN_GRAPHS.length
       ? `{ SELECT DISTINCT ?s WHERE { ${match} } }\n  FILTER EXISTS { ${inGiven('gText', '?s ?gtP ?gtO')} }`
       : match;
@@ -551,12 +574,29 @@ const esc = s => String(s).replace(/[&<>"]/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 let partial = false;
-async function sparql(query) {
-  const r = await fetch(ENDPOINT, {
-    method: 'POST',
-    headers: {'Accept': 'application/sparql-results+json'},
-    body: new URLSearchParams({query}),
-  });
+let running = 0, retries = Promise.resolve();
+const pause = ms => new Promise(res => setTimeout(res, ms));
+async function sparql(query, again = false) {
+  let r;
+  running++;
+  try {
+    r = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: {'Accept': 'application/sparql-results+json'},
+      body: new URLSearchParams({query}),
+    });
+  } catch (e) {
+    if (again) throw e;
+    const turn = retries.then(async () => {
+      for (let i = 0; i < 50 && running > 0; i++) await pause(100);
+      await pause(1000);
+      return sparql(query, true);
+    });
+    retries = turn.catch(() => {});
+    return turn;
+  } finally {
+    running--;
+  }
   if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
   if (r.status === 206) partial = true;
   return (await r.json()).results.bindings;
@@ -586,6 +626,7 @@ const noFilter = GIVEN_GRAPHS.length ? inGiven('gType', '?s a ?anyClass') : '?s 
 const whereWith = extra => `${filters() || noFilter}\n  ${IRI_ONLY}${extra || ''}`;
 
 const offered = {cls: null, graph: null};
+if (GIVEN_GRAPHS.length === 1) offered.graph = false;
 const offersChoice = rows => rows.length >= 2 &&
   rows.filter(b => Number(b.n.value) >= 2).length > rows.length / 2;
 const shown = key => offered[key] !== false || !!state[key];
@@ -651,6 +692,7 @@ async function loadFacets(current) {
 }
 
 function renderFacets() {
+  if (sk.on) { renderSchemes(); return; }
   const {classes, graphs} = facetRows;
   const pins = pinned();
   const known = new Map([...classes, ...facetRows.pins].map(b => [b.c.value, b]));
@@ -692,6 +734,7 @@ function renderFacets() {
       shown('cls') || pins.length > 0) +
     section('graph', 'Graph',
       render(graphs, b => b.g.value, b => b.title ? b.title.value : localName(b.g.value), 'graph'));
+  if ([...classes, ...facetRows.pins].some(b => SKOS_CLASSES.has(b.c.value))) skosBtn.hidden = false;
   searchPrompt();
 }
 
@@ -856,7 +899,7 @@ async function loadResults(append, current) {
                                 label: b.label ? b.label.value : null,
                                 date: b.date ? b.date.value.slice(0, 10) : null }));
   }
-  if (!current()) return;
+  if (!current() || sk.on) return;
   const shown = state.offset + rows.length;
   const glyph = state.sort === 'desc' ? '▼' : state.sort === 'asc' ? '▲' : '⇅';
   const sought = state.text ? ` matching <span class="typed">“${esc(state.text)}”</span>` : '';
@@ -999,7 +1042,10 @@ async function loadDetail(iri, pane) {
     : r.o.type === 'bnode'
       ? (r.inner.length ? innerHtml(r.inner) : '<span class="t">[blank node]</span>')
       : esc(r.o.value);
-  const labelRow = facts.find(r => r.p.value === 'http://www.w3.org/2000/01/rdf-schema#label');
+  const prefs = facts.filter(r => r.p.value === SKOS_NS + 'prefLabel');
+  const labelRow = facts.find(r => r.p.value === 'http://www.w3.org/2000/01/rdf-schema#label') ||
+    LANGS.map(l => prefs.find(r => (r.o['xml:lang'] || '').toLowerCase().split('-')[0] === l)).find(Boolean) ||
+    prefs[0];
   const heading = labelRow ? labelRow.o.value : localName(iri);
   pane.querySelector('.spine').textContent = heading;
   pane.querySelector('.body').innerHTML =
@@ -1036,13 +1082,18 @@ async function refresh(listOnly = false) {
         : textIndex && textQuery(state.text) ? ' (Virtuoso text index; matches words, not substrings)'
         : ' (no search sidecar; SPARQL scan)')
       : '';
-    const cut = partial ? ' – the endpoint cut some answers short; counts may be incomplete' : '';
-    const scope = GIVEN_GRAPHS.length
-      ? `, ${GIVEN_GRAPHS.length} graph${GIVEN_GRAPHS.length === 1 ? '' : 's'} only` : '';
-    s.textContent = `connected to ${ENDPOINT}${scope}${scan}${cut}`;
+    s.textContent = connectedText(scan);
   } catch (e) {
+    if (!textFlat && GIVEN_GRAPHS.length && /SQ156/.test(e.message)) { textFlat = true; return refresh(listOnly); }
     if (current()) fail(e);
   }
+}
+
+function connectedText(scan = '') {
+  const cut = partial ? ' – the endpoint cut some answers short; counts may be incomplete' : '';
+  const scope = GIVEN_GRAPHS.length
+    ? `, ${GIVEN_GRAPHS.length} graph${GIVEN_GRAPHS.length === 1 ? '' : 's'} only` : '';
+  return `connected to ${ENDPOINT}${scope}${scan}${cut}`;
 }
 
 document.addEventListener('click', e => {
@@ -1067,12 +1118,43 @@ document.addEventListener('click', e => {
     loadResults(false, take('results')).catch(fail);
     return;
   }
+  if (e.target.closest('#facets.folded')) { fold(false); setTarget('scheme'); return; }
   const clear = e.target.closest('[data-clear]');
+  if (clear && clear.dataset.clear === 'scheme') { clearScheme(); return; }
   if (clear) { state[clear.dataset.clear] = null; selectionChanged(); renderFacets(); refresh(); return; }
   const seek = e.target.closest('button.seek');
   if (seek) { setTarget(seek.dataset.seek); qEl.focus(); return; }
   if (e.target.id === 'catlink') { if (CATALOGUE) openEntity(CATALOGUE, null); return; }
   if (e.target.id === 'panes') { setStacked(!stacked); return; }
+  if (e.target.id === 'skosbtn') { setSkos(!sk.on); return; }
+  const group = e.target.closest('[data-group]');
+  if (group) {
+    sk.groups.has(group.dataset.group) ? sk.groups.delete(group.dataset.group) : sk.groups.add(group.dataset.group);
+    renderSchemes();
+    return;
+  }
+  const scheme = e.target.closest('[data-scheme]');
+  if (scheme) { selectScheme(scheme.dataset.scheme); return; }
+  const chev = e.target.closest('button.chev[data-node]');
+  if (chev) { toggleNode(chev.dataset.node).catch(fail); return; }
+  const moreKids = e.target.closest('button[data-more]');
+  if (moreKids) {
+    const parent = moreKids.dataset.more || null, e = sk.scheme, current = () => sk.scheme === e;
+    const at = parent ? (node(parent).kids || []).length : (sk.roots || []).length;
+    moreKids.disabled = true;
+    loadLevel(sk.scheme, parent, at, current).then(() => { if (current()) renderConcepts(); }, fail);
+    return;
+  }
+  if (e.target.id === 'treeshut') { sk.open.clear(); renderConcepts(); return; }
+  if (e.target.id === 'treeall' || e.target.id === 'treeopen') {
+    const expand = e.target.id === 'treeopen';
+    wholeScheme().then(ok => {
+      if (!ok) return;
+      if (expand) for (const [iri, n] of sk.nodes) if (n.kids && n.kids.length) sk.open.add(iri);
+      renderConcepts();
+    }, fail);
+    return;
+  }
   const spine = e.target.closest('.spine');
   if (spine) { reveal(spine.parentElement); return; }
   if (e.target === results && results.classList.contains('covered')) {
@@ -1160,7 +1242,7 @@ facetsEl.addEventListener('keydown', e => {
 
 const qEl = document.getElementById('q');
 let target = 'list';
-const sectionFilter = {cls: '', graph: ''};
+const sectionFilter = {cls: '', graph: '', scheme: ''};
 let timer = 0;
 
 qEl.addEventListener('input', () => {
@@ -1178,6 +1260,12 @@ qEl.addEventListener('keydown', e => {
 });
 
 function search(text) {
+  if (sk.on) {
+    if (text === sk.text) return;
+    sk.text = text;
+    skosSearch();
+    return;
+  }
   if (text === state.text) return;
   const counted = state.text && !state.within;
   if (!text) state.within = false;
@@ -1200,7 +1288,7 @@ function setTarget(t) {
   if (timer) { clearTimeout(timer); timer = 0; search(qEl.value.trim()); }
   const left = target;
   target = t;
-  qEl.value = t === 'list' ? state.text : sectionFilter[t];
+  qEl.value = t !== 'list' ? sectionFilter[t] : sk.on ? sk.text : state.text;
   if (left !== 'list' && sectionFilter[left]) { sectionFilter[left] = ''; renderFacets(); }
   else searchPrompt();
 }
@@ -1212,15 +1300,19 @@ function selectionChanged() {
 
 const SEEK_ICON = '<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true" fill="none" ' +
   'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>';
-const SEEK_NAMES = {cls: 'the Class list', graph: 'the Graph list', list: 'the entities listed'};
-const lit = key => key === target && (key !== 'list' || !!(state.cls || state.graph));
+const SEEK_NAMES = {cls: 'the Class list', graph: 'the Graph list', scheme: 'the Scheme list',
+                    list: 'the entities listed'};
+const lit = key => key === target &&
+  (key !== 'list' || (sk.on ? !!sk.scheme : !!(state.cls || state.graph)));
 const seekButton = key => `<button class="seek${lit(key) ? ' on' : ''}" data-seek="${key}" ` +
   `title="Search ${SEEK_NAMES[key]}" aria-label="Search ${SEEK_NAMES[key]}">${SEEK_ICON}</button>`;
 
 function searchPrompt() {
-  qEl.placeholder = `Search ${target === 'cls' ? 'classes' : target === 'graph' ? 'graphs' : listName()}`;
-  qEl.title = target === 'list' ? 'Searches every string value an entity carries, not only labels'
-    : `Searches the names in ${SEEK_NAMES[target]}`;
+  qEl.placeholder = `Search ${target === 'cls' ? 'classes' : target === 'graph' ? 'graphs'
+    : target === 'scheme' ? 'schemes'
+    : !sk.on ? listName() : sk.scheme ? `concepts in ${schemeName(sk.scheme)}` : 'concepts'}`;
+  qEl.title = target !== 'list' ? `Searches the names in ${SEEK_NAMES[target]}`
+    : sk.on ? 'Searches the labels and notations of the concepts' : 'Searches every string value an entity carries, not only labels';
   for (const b of document.querySelectorAll('button.seek')) b.classList.toggle('on', lit(b.dataset.seek));
 }
 
@@ -1256,6 +1348,452 @@ function plural({value, lang}) {
     : word + 's';
   const name = before + many + tail;
   return /^\p{Lu}\p{Ll}+(?:\s+[^\p{Lu}\s]\S*)*$/u.test(value) ? name[0].toLowerCase() + name.slice(1) : name;
+}
+
+const SKOS_NS = 'http://www.w3.org/2004/02/skos/core#';
+const SKOS_PREFIX = 'PREFIX skos: <http://www.w3.org/2004/02/skos/core#>\n' +
+  'PREFIX skosxl: <http://www.w3.org/2008/05/skos-xl#>\n';
+const SKOS_CLASSES = new Set([SKOS_NS + 'Concept', SKOS_NS + 'ConceptScheme']);
+const XL_PATH = 'skosxl:prefLabel/skosxl:literalForm';
+const SCHEME_CAP = 500;
+const DRAW_CAP = 5000;
+const LANG = ((new URLSearchParams(location.search).get('lang') || navigator.language || 'en')
+  .toLowerCase().match(/^[a-z]{2,3}/) || ['en'])[0];
+const LANGS = LANG === 'en' ? ['en'] : [LANG, 'en'];
+const skosBtn = document.getElementById('skosbtn');
+let wantScheme = new URLSearchParams(location.search).get('scheme');
+const sk = {
+  on: new URLSearchParams(location.search).get('view') === 'skos',
+  byIri: new Map(),
+  top: null,
+  groups: new Set(),
+  scheme: null,
+  xl: false,
+  nodes: new Map(),
+  roots: null, rootsMore: false,
+  whole: false,
+  open: new Set(),
+  text: '',
+  found: null,
+  hits: null,
+};
+
+const labelOpts = (v, path = 'skos:prefLabel') =>
+  LANGS.map((l, i) => `OPTIONAL { ?${v} ${path} ?${v}L${i} FILTER(langMatches(lang(?${v}L${i}), "${l}")) }`)
+    .concat(`OPTIONAL { ?${v} ${path} ?${v}La }`).join('\n    ');
+const labelOf = v => `COALESCE(${LANGS.map((l, i) => `SAMPLE(?${v}L${i})`).join(', ')}, SAMPLE(?${v}La))`;
+
+function inSchemeGraphs(e, pattern) {
+  const g = e.graphs.includes(e.iri) ? [e.iri] : e.graphs;
+  if (!g.length) return pattern;
+  if (g.length === 1) return `GRAPH <${g[0]}> { ${pattern} }`;
+  return `VALUES ?gS { ${g.map(x => `<${x}>`).join(' ')} }\n  GRAPH ?gS { ${pattern} }`;
+}
+
+const schemeName = e => e.label ? e.label.value : localName(e.iri);
+const nodeName = iri => { const n = sk.nodes.get(iri); return n && n.label ? n.label.value : localName(iri); };
+const byNodeName = (a, b) => nodeName(a).localeCompare(nodeName(b), LANG);
+function node(iri) {
+  if (!sk.nodes.has(iri)) sk.nodes.set(iri, {label: null, notation: null, kids: null, more: false, count: 0});
+  return sk.nodes.get(iri);
+}
+
+async function loadSchemes() {
+  const ask = inGraph => sparql(`${PREFIX}${SKOS_PREFIX}SELECT ?s ?g (${labelOf('s')} AS ?label) WHERE {
+  ${inGraph ? `${GIVEN_GRAPHS.length ? `VALUES ?g { ${graphList} }\n  ` : ''}GRAPH ?g { ?s a skos:ConceptScheme .
+    ${labelOpts('s')} }` : `?s a skos:ConceptScheme .\n  ${labelOpts('s')}`}
+} GROUP BY ?s ?g`);
+  let rows = await ask(true);
+  if (!rows.length && !GIVEN_GRAPHS.length) rows = await ask(false);
+  const by = new Map();
+  for (const b of rows) {
+    if (b.s.type !== 'uri' || !iriSafe(b.s.value)) continue;
+    const e = by.get(b.s.value) || {iri: b.s.value, graphs: [], label: null, n: null, nested: []};
+    if (b.g && iriSafe(b.g.value) && !e.graphs.includes(b.g.value)) e.graphs.push(b.g.value);
+    if (b.label && !e.label) e.label = b.label;
+    by.set(e.iri, e);
+  }
+  for (const e of by.values()) {
+    if (e.graphs.includes(e.iri)) continue;
+    const host = e.graphs.map(g => by.get(g)).find(h => h && h.graphs.includes(h.iri));
+    if (host) { host.nested.push(e); e.host = host; }
+  }
+  sk.byIri = by;
+  sk.top = [...by.values()].filter(e => !e.host);
+}
+
+async function loadSchemeCounts(current) {
+  const inGraphs = [...sk.byIri.values()].some(e => e.graphs.length);
+  const rows = await sparql(`${SKOS_PREFIX}SELECT ?s (COUNT(DISTINCT ?c) AS ?n) WHERE {
+  ${inGraphs ? `${GIVEN_GRAPHS.length ? `VALUES ?g { ${graphList} }\n  ` : ''}GRAPH ?g { ?s a skos:ConceptScheme . ?c skos:inScheme ?s }`
+             : '?s a skos:ConceptScheme . ?c skos:inScheme ?s .'}
+} GROUP BY ?s`);
+  if (!current()) return;
+  for (const e of sk.byIri.values()) e.n = 0;
+  for (const b of rows) { const e = sk.byIri.get(b.s.value); if (e) e.n = Number(b.n.value); }
+  renderSchemes();
+}
+
+async function loadSchemeTitles(current) {
+  const nameless = [...sk.byIri.values()].filter(e => !e.label);
+  if (!nameless.length) return;
+  const rows = await sparql(`${PREFIX}${SKOS_PREFIX}SELECT ?s ?t WHERE {
+  VALUES ?s { ${nameless.map(e => `<${e.iri}>`).join(' ')} }
+  ?s <http://purl.org/dc/terms/title>|rdfs:label|(${XL_PATH}) ?t .
+}`);
+  if (!current()) return;
+  const titles = new Map();
+  for (const b of rows) {
+    if (!titles.has(b.s.value)) titles.set(b.s.value, []);
+    titles.get(b.s.value).push(b.t);
+  }
+  for (const [s, ts] of titles) { const e = sk.byIri.get(s); if (e && !e.label) e.label = pickLabel(ts); }
+  renderSchemes();
+}
+
+function renderSchemes() {
+  const f = target === 'scheme' && sectionFilter.scheme.toLowerCase();
+  const hit = e => !f || schemeName(e).toLowerCase().includes(f) || e.iri.toLowerCase().includes(f);
+  const byName = (a, b) => schemeName(a).localeCompare(schemeName(b), LANG);
+  const row = (e, depth) => {
+    const kids = e.nested.filter(hit);
+    if (!hit(e) && !kids.length) return '';
+    const open = f ? kids.length > 0 : sk.groups.has(e.iri);
+    const chev = !e.nested.length ? '' :
+      `<button class="chev" data-group="${esc(e.iri)}" aria-expanded="${open}"
+               title="${open ? 'Hide' : 'Show'} the ${e.nested.length} schemes in its graph">${open ? '▾' : '▸'}</button>`;
+    return `<div class="facet${sk.scheme === e ? ' on' : ''}" data-scheme="${esc(e.iri)}" title="${esc(e.iri)}"
+                 style="padding-left:${6 + depth * 16}px"><span>${chev}${esc(schemeName(e))}</span><span class="n">${e.n ?? ''}</span></div>` +
+      (open ? (f ? kids : e.nested).slice().sort(byName).map(k => row(k, depth + 1)).join('') : '');
+  };
+  const list = sk.top ? sk.top.slice().sort(byName).map(e => row(e, 0)).join('') : '';
+  facetsEl.innerHTML =
+    `<h2>Scheme${seekButton('scheme')} ${sk.scheme ? '<button class="clear" data-clear="scheme">clear</button>' : ''}</h2>` +
+    (sk.top === null ? '<p class="t">loading…</p>'
+      : list || `<p class="t">${f ? `No scheme matches “${esc(sectionFilter.scheme)}”.` : 'This store holds no concept scheme.'}</p>`);
+  facetsEl.dataset.spine = sk.scheme ? schemeName(sk.scheme) : 'Schemes';
+  searchPrompt();
+}
+
+function fold(on) {
+  facetsEl.classList.toggle('folded', on && !phone.matches);
+  coverSoon();
+}
+
+function selectScheme(iri) {
+  const e = sk.byIri.get(iri);
+  if (!e) return;
+  if (sk.scheme === e) { clearScheme(); return; }
+  Object.assign(sk, {scheme: e, xl: false, nodes: new Map(), roots: null, rootsMore: false,
+                     whole: false, open: new Set(), found: null, hits: null});
+  setTarget('list');
+  renderSchemes();
+  fold(true);
+  syncUrl();
+  loadTree(take('tree')).catch(fail);
+}
+
+function clearScheme() {
+  take('tree');
+  Object.assign(sk, {scheme: null, nodes: new Map(), roots: null, found: null, hits: null});
+  fold(false);
+  renderSchemes();
+  syncUrl();
+  if (sk.text) skosSearch(); else renderConcepts();
+}
+
+async function loadTree(current) {
+  const e = sk.scheme;
+  renderConcepts('loading…');
+  if (e.n !== null && e.n <= SCHEME_CAP) await loadWhole(e, current);
+  else await loadLevel(e, null, 0, current);
+  if (!current()) return;
+  if (sk.text) await searchScheme(current);
+  else renderConcepts();
+}
+
+async function loadWhole(e, current) {
+  const ask = path => sparql(`${SKOS_PREFIX}SELECT ?c ?p (${labelOf('c')} AS ?label) (SAMPLE(?nt0) AS ?notation) (SAMPLE(?nts0) AS ?nts) WHERE {
+  ${inSchemeGraphs(e, `?c skos:inScheme <${e.iri}> .
+    OPTIONAL { { ?c skos:broader ?p } UNION { ?p skos:narrower ?c } }
+    ${labelOpts('c', path)}`)}
+  OPTIONAL { SELECT ?c (SAMPLE(?nt) AS ?nt0) (COUNT(DISTINCT ?nt) AS ?nts0) WHERE {
+    ${inSchemeGraphs(e, `?c skos:inScheme <${e.iri}> ; skos:notation ?nt`)} } GROUP BY ?c }
+} GROUP BY ?c ?p`);
+  let rows = await ask(sk.xl ? XL_PATH : 'skos:prefLabel');
+  if (!sk.xl && rows.length && !rows.some(b => b.label)) { sk.xl = true; rows = await ask(XL_PATH); }
+  if (!current()) return;
+  const inScheme = new Set(rows.map(b => b.c.value));
+  for (const c of inScheme) { const n = node(c); n.kids = []; n.more = false; }
+  const parented = new Set();
+  for (const b of rows) {
+    const n = node(b.c.value);
+    if (b.label) n.label = b.label;
+    if (b.notation && b.nts && b.nts.value === '1') n.notation = b.notation.value;
+    if (b.p && b.p.value !== b.c.value && inScheme.has(b.p.value)) {
+      const kids = node(b.p.value).kids;
+      if (!kids.includes(b.c.value)) kids.push(b.c.value);
+      parented.add(b.c.value);
+    }
+  }
+  for (const c of inScheme) { const n = node(c); n.kids.sort(byNodeName); n.count = n.kids.length; }
+  sk.roots = [...inScheme].filter(c => !parented.has(c)).sort(byNodeName);
+  sk.rootsMore = false;
+  sk.whole = true;
+}
+
+async function loadLevel(e, parent, offset, current) {
+  const ask = (pick, path) => sparql(`${SKOS_PREFIX}SELECT ?c ?label ?kids WHERE {
+  { SELECT ?c (${labelOf('c')} AS ?label) WHERE {
+      ${inSchemeGraphs(e, `${pick}\n    ${labelOpts('c', path)}`)}
+    } GROUP BY ?c }
+  OPTIONAL { SELECT ?c (COUNT(DISTINCT ?k) AS ?kids) WHERE {
+      ${inSchemeGraphs(e, '{ ?k skos:broader ?c } UNION { ?c skos:narrower ?k }')} } GROUP BY ?c }
+} ORDER BY LCASE(STR(?label)) ?c LIMIT ${PAGE + 1} OFFSET ${offset}`);
+  const top = `{ ?c skos:topConceptOf <${e.iri}> } UNION { <${e.iri}> skos:hasTopConcept ?c }`;
+  const loose = `?c skos:inScheme <${e.iri}> FILTER NOT EXISTS { ?c skos:broader ?b . ?b skos:inScheme <${e.iri}> }`;
+  const pick = parent ? `{ ?c skos:broader <${parent}> } UNION { <${parent}> skos:narrower ?c }`
+    : e.loose ? loose : top;
+  let rows = await ask(pick, sk.xl ? XL_PATH : 'skos:prefLabel');
+  if (!parent && !offset && !rows.length && !e.loose) { e.loose = true; rows = await ask(loose, sk.xl ? XL_PATH : 'skos:prefLabel'); }
+  if (!sk.xl && rows.length && !rows.some(b => b.label)) {
+    sk.xl = true;
+    rows = await ask(parent ? pick : e.loose ? loose : top, XL_PATH);
+  }
+  if (!current()) return;
+  const list = rows.slice(0, PAGE).map(b => {
+    const n = node(b.c.value);
+    if (b.label) n.label = b.label;
+    n.count = b.kids ? Number(b.kids.value) : 0;
+    return b.c.value;
+  });
+  const more = rows.length > PAGE;
+  if (parent) { const p = node(parent); p.kids = (offset && p.kids ? p.kids : []).concat(list); p.more = more; }
+  else { sk.roots = (offset && sk.roots ? sk.roots : []).concat(list); sk.rootsMore = more; }
+}
+
+function renderConcepts(note) {
+  if (!sk.on) return;
+  const e = sk.scheme;
+  const head = title => `<h2><span>${title}${seekButton('list')}</span>${e && !note && !sk.found ? `<span class="tools">${
+    sk.whole ? '' : `<button class="clear" id="treeall" title="Load every concept of the scheme">show all</button>`}
+    <button class="clear" id="treeopen">expand all</button>
+    <button class="clear" id="treeshut">collapse all</button></span>` : ''}</h2>`;
+  const sought = sk.text ? ` matching <span class="typed">“${esc(sk.text)}”</span>` : '';
+  if (!e) {
+    results.innerHTML = head(`Concepts${sought}`) + (note ? `<p class="t">${note}</p>`
+      : sk.hits ? (sk.hits.length ? sk.hits.map(h => rowHtml(h.iri, h.label,
+          h.scheme ? schemeName(h.scheme) : '')).join('') : '<p class="t">No concept matches.</p>')
+      : '<p class="t">Pick a scheme on the left, or search every scheme’s concepts.</p>');
+    searchPrompt();
+    return;
+  }
+  const count = e.n !== null ? ` (${e.n})` : '';
+  if (note) { results.innerHTML = head(`Concepts in ${esc(schemeName(e))}${count}`) + `<p class="t">${note}</p>`; return; }
+  const kidsOf = iri => sk.found ? sk.found.kids.get(iri) || [] : node(iri).kids || [];
+  let drawn = 0;
+  const out = [];
+  const walk = (iris, depth, above) => {
+    for (const iri of iris) {
+      if (drawn >= DRAW_CAP) return;
+      const n = node(iri);
+      const kids = kidsOf(iri);
+      const has = sk.found ? kids.length > 0 : n.kids ? n.kids.length > 0 || n.more : n.count > 0;
+      const open = has && !above.has(iri) && (sk.found ? true : sk.open.has(iri));
+      const chev = has ? `<button class="chev" data-node="${esc(iri)}" aria-expanded="${open}"
+                                  aria-label="${open ? 'Collapse' : 'Expand'}">${open ? '▾' : '▸'}</button>` : '<span class="chev"></span>';
+      out.push(`<div class="node${sk.found && sk.found.hits.has(iri) ? ' hit' : ''}" style="--d:${depth}">${chev}` +
+        `<a href="#" data-iri="${esc(iri)}" title="${esc(iri)}">${n.notation ? `<span class="nt">${esc(n.notation)}</span> ` : ''}` +
+        `${esc(nodeName(iri))}</a>${!sk.found && n.count ? `<span class="n">${n.count}</span>` : ''}</div>`);
+      drawn++;
+      if (!open) continue;
+      if (!sk.found && !n.kids) { out.push(`<div class="node" style="--d:${depth + 1}"><span class="t">loading…</span></div>`); continue; }
+      above.add(iri);
+      walk(kids, depth + 1, above);
+      above.delete(iri);
+      if (!sk.found && n.more) out.push(`<div class="node" style="--d:${depth + 1}"><button class="clear" data-more="${esc(iri)}">show ${PAGE} more</button></div>`);
+    }
+  };
+  walk(sk.found ? sk.found.roots : sk.roots || [], 0, new Set());
+  if (!sk.found && sk.rootsMore) out.push(`<div class="node"><button class="clear" data-more="">show ${PAGE} more</button></div>`);
+  const capped = drawn >= DRAW_CAP ? `<p class="t">The first ${DRAW_CAP} rows; collapse a branch, or search, to see the rest.</p>` : '';
+  results.innerHTML = head(`Concepts in ${esc(schemeName(e))}${count}${sought}`) +
+    (out.length ? `<div class="tree">${out.join('')}</div>` + capped
+      : `<p class="t">${sk.found ? 'No concept matches.' : 'This scheme holds no concept in its graph.'}</p>`);
+  searchPrompt();
+}
+
+async function toggleNode(iri) {
+  if (sk.open.has(iri)) { sk.open.delete(iri); renderConcepts(); return; }
+  sk.open.add(iri);
+  const n = node(iri);
+  renderConcepts();
+  if (!n.kids) {
+    const e = sk.scheme, current = () => sk.scheme === e;
+    await loadLevel(e, iri, 0, current);
+    if (current()) renderConcepts();
+  }
+}
+
+async function wholeScheme() {
+  if (sk.whole) return true;
+  const current = take('tree');
+  renderConcepts('loading every concept of the scheme…');
+  await loadWhole(sk.scheme, current);
+  return current();
+}
+
+function skosSearch() {
+  const current = take('skossearch');
+  return (sk.scheme ? searchScheme(current) : searchAllSchemes(current)).catch(e => { if (current()) fail(e); });
+}
+
+const knownWord = () => ([...sk.byIri.values(), ...sk.nodes.values()].map(e => e.label ? e.label.value : '')
+  .join(' ').match(/[A-Za-z]{4,}/) || [])[0];
+
+function labelMatch(text, xl) {
+  const bind = xl ? 'VALUES ?lp { skosxl:prefLabel skosxl:altLabel } ?m ?lp ?lx . ?lx skosxl:literalForm ?l .'
+                  : 'VALUES ?lp { skos:prefLabel skos:altLabel } ?m ?lp ?l .';
+  const langs = LANGS.map(l => `langMatches(lang(?l), "${l}")`).concat('lang(?l) = ""').join(' || ');
+  const words = textIndex && textQuery(text);
+  if (words) return { bind, index: `?l bif:contains '${words}' .`, filter: `FILTER(${langs})` };
+  const t = text.replace(/["\\]/g, '\\$&');
+  return { bind, index: '', filter: `FILTER((${langs}) && CONTAINS(LCASE(STR(?l)), LCASE("${t}")))` };
+}
+
+async function searchScheme(current) {
+  const e = sk.scheme;
+  if (!sk.text) { sk.found = null; renderConcepts(); return; }
+  if (sk.whole) {
+    const t = sk.text.toLowerCase();
+    const parents = new Map();
+    for (const [iri, n] of sk.nodes) for (const k of n.kids || []) {
+      if (!parents.has(k)) parents.set(k, []);
+      parents.get(k).push(iri);
+    }
+    const hits = new Set([...sk.nodes.keys()].filter(iri => {
+      const n = sk.nodes.get(iri);
+      return nodeName(iri).toLowerCase().includes(t) || (n.notation || '').toLowerCase().includes(t);
+    }));
+    sk.found = keep(hits, iri => parents.get(iri) || []);
+    renderConcepts();
+    return;
+  }
+  renderConcepts('searching…');
+  await probeTextIndex(knownWord());
+  const m = labelMatch(sk.text, sk.xl);
+  const rows = await sparql(`${SKOS_PREFIX}SELECT DISTINCT ?m ?a ?p WHERE {
+  ${m.index ? `${m.bind} ${m.index} ${m.filter}\n  ` : ''}${inSchemeGraphs(e,
+    `?m skos:inScheme <${e.iri}> .${m.index ? '' : ` ${m.bind} ${m.filter}`}
+    ?m skos:broader* ?a .
+    OPTIONAL { ?a skos:broader ?p }`)}
+} LIMIT 1000`);
+  if (!current()) return;
+  const hits = new Set(), parents = new Map();
+  for (const b of rows) {
+    if (!iriSafe(b.m.value) || !iriSafe(b.a.value)) continue;
+    hits.add(b.m.value);
+    if (!parents.has(b.a.value)) parents.set(b.a.value, []);
+    if (b.p && b.p.value !== b.a.value && iriSafe(b.p.value)) parents.get(b.a.value).push(b.p.value);
+  }
+  const unnamed = [...parents.keys()].filter(iri => !node(iri).label);
+  if (unnamed.length) {
+    const labels = await sparql(`${SKOS_PREFIX}SELECT ?a ?l WHERE {
+  VALUES ?a { ${unnamed.map(a => `<${a}>`).join(' ')} }
+  ${inSchemeGraphs(e, `?a ${sk.xl ? XL_PATH : 'skos:prefLabel'} ?l`)}
+}`);
+    if (!current()) return;
+    const byConcept = new Map();
+    for (const b of labels) {
+      if (!byConcept.has(b.a.value)) byConcept.set(b.a.value, []);
+      byConcept.get(b.a.value).push(b.l);
+    }
+    for (const [iri, ls] of byConcept) node(iri).label = pickLabel(ls);
+  }
+  sk.found = keep(hits, iri => (parents.get(iri) || []).filter(p => parents.has(p)));
+  renderConcepts();
+}
+
+const pickLabel = ls => LANGS.map(l => ls.find(t => (t['xml:lang'] || '').toLowerCase().split('-')[0] === l))
+  .find(Boolean) || ls[0];
+
+function keep(hits, parentsOf) {
+  const kept = new Set(), stack = [...hits];
+  while (stack.length) {
+    const iri = stack.pop();
+    if (kept.has(iri)) continue;
+    kept.add(iri);
+    stack.push(...parentsOf(iri));
+  }
+  const kids = new Map(), roots = [];
+  for (const iri of kept) {
+    const ps = parentsOf(iri).filter(p => kept.has(p));
+    if (!ps.length) roots.push(iri);
+    for (const p of ps) { if (!kids.has(p)) kids.set(p, []); kids.get(p).push(iri); }
+  }
+  for (const k of kids.values()) k.sort(byNodeName);
+  return {roots: roots.sort(byNodeName), kids, hits};
+}
+
+async function searchAllSchemes(current) {
+  if (!sk.text) { sk.hits = null; renderConcepts(); return; }
+  renderConcepts('searching…');
+  await probeTextIndex(knownWord());
+  const inScheme = GIVEN_GRAPHS.length ? inGiven('gT', '?m skos:inScheme ?s') : '?m skos:inScheme ?s .';
+  const ask = xl => {
+    const m = labelMatch(sk.text, xl);
+    return sparql(`${SKOS_PREFIX}SELECT ?m ?s (SAMPLE(?l) AS ?label) WHERE {
+  ${m.bind} ${m.index} ${m.filter}
+  ${inScheme}
+} GROUP BY ?m ?s LIMIT ${PAGE}`);
+  };
+  let rows = await ask(false);
+  if (!rows.length && current()) rows = await ask(true);
+  if (!current()) return;
+  sk.hits = rows.filter(b => b.m.type === 'uri' && iriSafe(b.m.value))
+    .map(b => ({iri: b.m.value, label: b.label ? b.label.value : null, scheme: sk.byIri.get(b.s.value)}));
+  renderConcepts();
+}
+
+function setSkos(on) {
+  sk.on = on;
+  document.body.classList.toggle('skos', on);
+  skosBtn.hidden = !on && skosBtn.hidden;
+  skosBtn.setAttribute('aria-pressed', String(on));
+  clearTimeout(timer); timer = 0;
+  target = 'list';
+  sectionFilter.cls = sectionFilter.graph = sectionFilter.scheme = '';
+  qEl.value = on ? sk.text : state.text;
+  syncUrl();
+  if (!on) { fold(false); renderFacets(); return refresh(); }
+  fold(!!sk.scheme);
+  renderSchemes();
+  renderConcepts();
+  return skosRefresh();
+}
+
+async function skosRefresh() {
+  const s = document.getElementById('status');
+  const current = take('skos');
+  try {
+    s.textContent = 'querying…';
+    partial = false;
+    await loadSettings();
+    if (!sk.top) {
+      await loadSchemes();
+      if (!current()) return;
+      renderSchemes();
+      loadSchemeCounts(take('counts')).catch(fail);
+      loadSchemeTitles(take('titles')).catch(fail);
+      const want = wantScheme;
+      wantScheme = null;
+      if (want && sk.byIri.has(want)) selectScheme(want);
+      else renderConcepts();
+    }
+    if (current()) s.textContent = connectedText();
+  } catch (e) {
+    if (current()) fail(e);
+  }
 }
 const PANES = 'opsis-panes';
 const detail = document.getElementById('detail');
@@ -1338,6 +1876,10 @@ function syncUrl() {
   for (const p of panes()) params.append('open', p.dataset.iri);
   if (stacked) params.set('panes', 'stacked');
   else params.delete('panes');
+  if (sk.on) params.set('view', 'skos');
+  else params.delete('view');
+  if (sk.on && sk.scheme) params.set('scheme', sk.scheme.iri);
+  else params.delete('scheme');
   const q = params.toString();
   history.replaceState(null, '', q ? `?${q}` : location.pathname);
 }
@@ -1348,7 +1890,7 @@ const nav = document.getElementById('nav');
 let atPage = 0;
 let slideBack = false;
 const pages = () => [facetsEl, results, ...panes()];
-const firstPage = () => offered.cls !== null && !facetsEl.querySelector('.facet') ? 1 : 0;
+const firstPage = () => !sk.on && offered.cls !== null && !facetsEl.querySelector('.facet') ? 1 : 0;
 
 function show(n, instant) {
   const all = pages();
@@ -1365,10 +1907,10 @@ function renderNav() {
   if (!phone.matches) return;
   nav.hidden = atPage <= firstPage();
   if (nav.hidden) return;
-  const name = n => n === 0 ? (shown('cls') || pinned().length ? 'Classes' : 'Graphs')
-    : n === 1 ? 'Entities' : panes()[n - 2].querySelector('.spine').textContent;
+  const name = n => n === 0 ? (sk.on ? 'Schemes' : shown('cls') || pinned().length ? 'Classes' : 'Graphs')
+    : n === 1 ? (sk.on ? 'Concepts' : 'Entities') : panes()[n - 2].querySelector('.spine').textContent;
   document.getElementById('back').textContent = `‹ ${name(atPage - 1)}`;
-  document.getElementById('scope').innerHTML = atPage !== 1 ? '' :
+  document.getElementById('scope').innerHTML = atPage !== 1 || sk.on ? '' :
     ['cls', 'graph'].filter(k => state[k]).map(k => {
       const nm = esc(facetName(k, state[k]).value);
       return `<button class="chip" data-clear="${k}" aria-label="Clear ${nm}">${nm} ×</button>`;
@@ -1430,6 +1972,8 @@ addEventListener('popstate', e => {
 document.addEventListener('click', e => {
   if (!phone.matches) return;
   if (e.target.closest('[data-clear]')) { renderNav(); return; }
+  if (e.target.closest('[data-group]')) return;
+  if (e.target.closest('[data-scheme]')) { if (sk.scheme) goTo(1); return; }
   const f = e.target.closest('.facet');
   if ((f && !e.target.closest('button.pin') && state[f.dataset.key] === f.dataset.v)
       || e.target.closest('[data-cls]')) goTo(1);
@@ -1455,7 +1999,7 @@ phone.addEventListener('change', () => {
 const reopen = new URLSearchParams(location.search).getAll('open');
 const landing = history.state;
 setStacked(stacked);
-const started = refresh();
+const started = sk.on ? setSkos(true) : refresh();
 if (phone.matches) {
   restore(reopen, null, true, started);
   history.replaceState({opsis: true, at: atPage,
